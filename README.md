@@ -32,4 +32,4 @@ VLBI.load("filename") |> uvtable
 See the [notebook](https://aplavin.github.io/VLBIFiles.jl/notebooks/examples.html) for docs and more usage examples.
 
 > [!NOTE]
-> This package was originally named `VLBIData.jl`. Then, in 2025, [VLBIData.jl](https://github.com/JuliaAPlavin/VLBIData.jl) was refocused solely on data structure definitions and visibility calculations, and its file I/O functions were transferred to `VLBIFiles.jl` (this package). To maintain continuity, `VLBIFiles.jl` carries on the `VLBIData` versioning starting at v0.3.31.
+> This package was originally named `VLBIData.jl`. Then, in 2025, [VLBIData.jl](https://github.com/JuliaAPlavin/VLBIData.jl) was refocused solely on data structure definitions and visibility calculations, and its file I/O functions were transferred to `VLBIFiles.jl` (this package). To maintain continuity, `VLBIFiles.jl` carries on the `VLBIData` versioning starting at v0.3.32.
