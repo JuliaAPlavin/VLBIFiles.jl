@@ -17,10 +17,10 @@ using AccessorsExtra
 using DelimitedFiles: readdlm
 using DateFormats: julian_day
 using PyFormattedStrings
-@reexport using InterferometricModels
-import InterferometricModels: UV
 using Statistics
 using Uncertain
+@reexport using InterferometricModels
+@reexport using VLBIData
 
 
 include("grouphdu.jl")
