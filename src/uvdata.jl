@@ -16,7 +16,7 @@ else
 	error("Unsupported kind: $kind")
 end
 
-Statistics.mean(xs::AbstractVector{<:VLBI.FrequencyWindow}) = VLBI.FrequencyWindow(
+Statistics.mean(xs::AbstractVector{<:FrequencyWindow}) = FrequencyWindow(
     first(xs).ix,
 	(@p xs map(_.freq) mean),
 	(@p xs map(_.width) sum),
@@ -54,7 +54,7 @@ function UVHeader(fh::FITSHeader)
 end
 
 
-function VLBI.Antenna(hdu_row::NamedTuple)
+function VLBIData.Antenna(hdu_row::NamedTuple)
     if !isempty(hdu_row.ORBPARM) && hdu_row.ORBPARM != 0
         @warn "Antennas with ORBPARM detected, be careful" hdu_row.ORBPARM hdu_row.ANNAME
     end
@@ -82,7 +82,7 @@ end
 Base.length(a::AntArray) = length(a.antennas)
 Base.getindex(a::AntArray, i::Int) = a.antennas[i]
 
-function VLBI.Baseline(array_ix::Integer, ant_ids::NTuple{2, Integer}, ant_arrays::Vector{AntArray})
+function VLBIData.Baseline(array_ix::Integer, ant_ids::NTuple{2, Integer}, ant_arrays::Vector{AntArray})
     ants = ant_arrays[array_ix].antennas
     names = map(ant_ids) do id
         ix = findfirst(ant -> ant.id == id, ants)
@@ -212,7 +212,7 @@ function _table(uvdata::UVData, impl=identity)
 end
 
 
-uvtable(uvd::VLBI.UVData; stokes=(:I, :LL, :RR)) = @p uvd _table filter(_.stokes ∈ stokes) map((;
+uvtable(uvd::UVData; stokes=(:I, :LL, :RR)) = @p uvd _table filter(_.stokes ∈ stokes) map((;
 	_.datetime, _.stokes, _.freq_spec,
 	spec=VisSpec(_.baseline, UV(_.uv)),
 	value=U.Value(_.visibility, 1/√_.weight),
