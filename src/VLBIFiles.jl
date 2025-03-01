@@ -8,6 +8,7 @@ using FITSIO: FITSHeader, FITS, TableHDU, read_header, colnames, FITSIO
 using Dates
 using Unitful, UnitfulAstro, UnitfulAngles
 using AxisKeys
+using AxisKeys.IntervalSets
 using StaticArrays
 using StructArrays
 using AccessorsExtra
@@ -18,6 +19,7 @@ using Statistics
 using Uncertain
 @reexport using InterferometricModels
 @reexport using VLBIData
+import VLBIData: frequency
 
 export VLBI, table, uvtable
 

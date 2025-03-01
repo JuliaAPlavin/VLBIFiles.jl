@@ -17,7 +17,6 @@ end
     using StaticArrays
     using Statistics
     using AxisKeys
-    using VLBIFiles: frequency
     cd(dirname(@__FILE__))
 
     img = VLBI.load("./data/map.fits", read_data=false)
@@ -42,7 +41,6 @@ end
     using StaticArrays
     using Statistics
     using AxisKeys
-    using VLBIFiles: frequency
     cd(dirname(@__FILE__))
 
     img = VLBI.load("./data/map.fits", read_data=true)
@@ -91,7 +89,6 @@ end
     using StaticArrays
     using Statistics
     using AxisKeys
-    using VLBIFiles: frequency
     cd(dirname(@__FILE__))
 
     mod = VLBI.load(MultiComponentModel, "./data/map.fits")
@@ -106,7 +103,6 @@ end
     using StaticArrays
     using Statistics
     using AxisKeys
-    using VLBIFiles: frequency
     cd(dirname(@__FILE__))
 
     img = VLBI.load("./data/map_stacked.fits", read_data=true)
@@ -126,7 +122,6 @@ end
     using StaticArrays
     using Statistics
     using AxisKeys
-    using VLBIFiles: frequency
     cd(dirname(@__FILE__))
 
     img = VLBI.load("./data/sampling_mean.fits", read_data=true)
@@ -142,7 +137,6 @@ end
     using Unitful, UnitfulAstro, UnitfulAngles
     using Dates
     using PyCall
-    using VLBIFiles: frequency
     using VLBIFiles.Uncertain
     using Statistics
     using StaticArrays
@@ -161,6 +155,9 @@ end
     @test antarr.name == "VLBA"
     @test map(a -> a.id, antarr.antennas) == 1:10
     @test map(a -> a.name, antarr.antennas) == [:BR, :FD, :HN, :KP, :LA, :MK, :NL, :OV, :PT, :SC]
+
+    @test frequency(uv.freq_windows[1]) == 1.5329522f10u"Hz"
+    @test frequency(uv.freq_windows[1], VLBIFiles.Interval) == VLBIFiles.Interval(1.5329522f10u"Hz", 1.5337521f10u"Hz")
 
     # old table extraction:
     df = table(uv)
@@ -251,7 +248,6 @@ end
     using Unitful, UnitfulAstro, UnitfulAngles
     using Dates
     using PyCall
-    using VLBIFiles: frequency
     using Statistics
     using StaticArrays
     using Tables
@@ -282,7 +278,6 @@ end
     using Unitful, UnitfulAstro, UnitfulAngles
     using Dates
     using PyCall
-    using VLBIFiles: frequency
     using Statistics
     using StaticArrays
     using Tables
@@ -302,7 +297,6 @@ end
     using Unitful, UnitfulAstro, UnitfulAngles
     using Dates
     using PyCall
-    using VLBIFiles: frequency
     using Statistics
     using StaticArrays
     using Tables
@@ -322,7 +316,6 @@ end
     using Unitful, UnitfulAstro, UnitfulAngles
     using Dates
     using PyCall
-    using VLBIFiles: frequency
     using Statistics
     using StaticArrays
     using Tables
