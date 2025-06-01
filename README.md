@@ -1,35 +1,48 @@
-# VLBIFiles.jl
+# 🌌 VLBIFiles.jl
 
-`VLBIFiles.jl` provides functions for reading and writing various data formats typically used in very long baseline interferometry (VLBI).
+A comprehensive Julia package for reading and writing various data formats commonly used in **Very Long Baseline Interferometry (VLBI)**.
 
-- Images, represented as `KeyedArray`s (from [AxisKeys.jl](https://github.com/mcabbott/AxisKeys.jl))
-  - `fits` files: ✅ read, ✅ write
-- Visibilities, represented as (almost raw) `KeyedArray`s or as flat tables
-  - `uvfits` files: ✅ read, ❌ write
-  - `fits-idi` files: 🟡 read, ❌ write
-- Source models, represented by [InterferometricModels.jl](https://github.com/JuliaAPlavin/InterferometricModels.jl)
-  - `difmap` model files: ✅ read, ✅ write
-  - `clean` components within `fits` images: ✅ read, ❌ write
+## 🔍 Overview
 
-To read a file, use:
+VLBIFiles.jl provides a unified interface for handling diverse file formats used in VLBI astronomy. The package features automatic format detection and offers flexible data representations tailored to different analysis workflows.
+
+## 📊 Supported Data Types
+
+### 📷 Images
+Astronomical images represented as `KeyedArray`s from [AxisKeys.jl](https://github.com/mcabbott/AxisKeys.jl):
+- **FITS files**: ✅ Read, ✅ Write
+
+### 📡 Visibilities
+Complex interferometric visibility data with multiple representation options:
+- **UVFITS files**: ✅ Read, ❌ Write
+- **FITS-IDI files**: 🟡 Read (partial support), ❌ Write
+
+### 🔭 Source Models
+Parametric astronomical source models powered by [InterferometricModels.jl](https://github.com/JuliaAPlavin/InterferometricModels.jl):
+- **Difmap model files**: ✅ Read, ✅ Write
+- **CLEAN components** (embedded in FITS images): ✅ Read, ❌ Write
+
+## 🚀 Quick Start
+
 ```julia
 using VLBIFiles
 
-# determine the file type automatically and read into its default representation
-VLBI.load("filename")
+# 🎯 Automatic format detection and loading
+data = VLBI.load("your_data_file")
 
-# specify the resulting type manually:
-VLBI.load(KeyedArray, "filename.fits")  # image as a KeyedArray
-VLBI.load(VLBI.UVData, "filename.uvf")  # visibilities as a UVData object
-VLBI.load(MultiComponentModel, "filename.mod")  # model from a difmap model file
-VLBI.load(MultiComponentModel, "filename.fits")  # CLEAN model from a fits image
+# 🎛️ Specify output data type explicitly
+image = VLBI.load(KeyedArray, "image.fits")           # Load as image
+uvdata = VLBI.load(VLBI.UVData, "visibilities.uvf")   # Load as UV data structure
+model = VLBI.load(MultiComponentModel, "source.mod")  # Load as source model
+clean_model = VLBI.load(MultiComponentModel, "clean_image.fits")  # Extract CLEAN model
 
-# read visibilities and return them as a "uv table"
-# see VLBIData.jl for the data structure definition
-VLBI.load("filename") |> uvtable
+# 📋 Convert visibilities to table format for analysis
+uv_table = VLBI.load("visibilities.uvfits") |> uvtable
 ```
 
-See the [notebook](https://aplavin.github.io/VLBIFiles.jl/notebooks/examples.html) for docs and more usage examples.
+## 📚 Documentation & Examples
+
+For more comprehensive documentation and usage examples, explore the [Pluto notebook](https://aplavin.github.io/VLBIFiles.jl/notebooks/examples.html).
 
 > [!NOTE]
-> This package was originally named `VLBIData.jl`. Then, in 2025, [VLBIData.jl](https://github.com/JuliaAPlavin/VLBIData.jl) was refocused solely on data structure definitions and visibility calculations, and its file I/O functions were transferred to `VLBIFiles.jl` (this package). To maintain continuity, `VLBIFiles.jl` carries on the `VLBIData` versioning starting at v0.3.32.
+> **📜 Package Evolution**: This package was originally named `VLBIData.jl`. In 2025, [VLBIData.jl](https://github.com/JuliaAPlavin/VLBIData.jl) was refocused exclusively on data structure definitions and visibility calculations, while its file I/O functionality was moved to `VLBIFiles.jl`. For continuity, `VLBIFiles.jl` continues the `VLBIData` versioning sequence starting from v0.3.32.
