@@ -19,7 +19,7 @@ using Statistics
 using Uncertain
 @reexport using InterferometricModels
 @reexport using VLBIData
-import VLBIData: frequency
+import VLBIData: frequency, uvtable
 
 export VLBI, table, uvtable
 
@@ -32,14 +32,17 @@ include("difmap_files.jl")
 include("loading.jl")
 
 baremodule VLBI
-import ..VLBIData
-Core.eval(VLBI, Expr(:import, Expr(:(:), Expr(:., :., :., :VLBIData),
-          [Expr(:., n) for n in VLBIData.names(VLBIData.VLBI; imported=true) if Core.:(===)(Core.:(===)(n, :VLBI), false)]...)))
+using Reexport
 
-import ..VLBIFiles:
+import ..VLBIData
+_names = [n for n in VLBIData.names(VLBIData.VLBI) if Core.:(===)(Core.:(===)(n, :VLBI), false)]
+Core.eval(VLBI, Expr(:import, Expr(:(:), Expr(:., :., :., :VLBIData), [Expr(:., n) for n in _names]...)))
+Core.eval(VLBI, Expr(:export, _names...))
+
+@reexport import ..VLBIFiles:
     VLBIFiles,
     load, save, guess_type,
-    table, uvtable, read_data_raw, read_data_arrays,
+    table, read_data_raw, read_data_arrays,
     FitsImage, FrequencyWindow, UVHeader, AntArray, UVData,
     pixel_size, pixel_steps, pixel_area
 using ..InterferometricModels
