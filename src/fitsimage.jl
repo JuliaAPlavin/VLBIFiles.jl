@@ -117,3 +117,16 @@ function save(fname, image::KeyedArray{<:Any,2}; kwargs...)
         end
     end
 end
+
+
+image_stored(::Type{KeyedArray}, fimg::FitsImage) = fimg.data
+image_clean(fimg::FitsImage; beam=Beam(fimg)) = ustrip ∘ intensity(convolve(load(MultiComponentModel, fimg.path), beam))
+
+image_residual(::Type{KeyedArray}, fimg::FitsImage) = _image_op(-, image_stored(KeyedArray, fimg), image_clean(KeyedArray, fimg))
+image_residual(fimg::FitsImage) = _image_op(-, image_stored(fimg), image_clean(fimg))
+
+image_clean_with_residual(::Type{KeyedArray}, fimg::FitsImage; beam=Beam(fimg)) = _image_op(+, image_clean(KeyedArray, fimg; beam), image_residual(KeyedArray, fimg))
+image_clean_with_residual(fimg::FitsImage; beam=Beam(fimg)) = _image_op(+, image_clean(fimg; beam), image_residual(fimg))
+
+_image_op(op, a::KeyedArray, b::KeyedArray) = op.(a, b)
+_image_op(op, a, b) = @inline xy -> op(a(xy), b(xy))

@@ -117,6 +117,44 @@ end
     @test_broken mod = VLBI.load(MultiComponentModel, "./data/map_stacked.fits")
 end
 
+@testitem "img clean/residual/combined" begin
+    using RectiGrids, AxisKeysExtra, Interpolations
+    using Unitful, UnitfulAngles, UnitfulAstro
+    using StaticArrays
+
+    img = VLBI.load("./data/map.fits")
+    nativebeam = Beam(img)
+    newbeam = Beam(CircularGaussian, σ = 5u"mas")
+    @test with_axiskeys(grid)(img) |> size == (512, 512)
+    
+    @test VLBI.image_stored(KeyedArray, img) === img.data
+    @test VLBI.image_stored(KeyedArray, img)(0, 0) ≈ 0.021357307f0
+
+    @test VLBI.image_clean(img; beam=nativebeam)(SVector(0,0)) ≈ 0.021302195437816945
+    @test VLBI.image_clean(img; beam=nativebeam)(SVector(3,0)u"mas") ≈ 0.0003380008663429093
+    @test VLBI.image_clean(img; beam=newbeam)(SVector(3,0)u"mas") ≈ 0.02823164807298988
+    xy = rand(SVector{2,Float64})u"mas"
+    @test VLBI.image_clean(img)(xy) == VLBI.image_clean(img; beam=nativebeam)(xy)
+
+    @test VLBI.image_clean_with_residual(img)(xy) == VLBI.image_clean_with_residual(img; beam=nativebeam)(xy)
+    @test VLBI.image_clean_with_residual(KeyedArray, img) == VLBI.image_clean(KeyedArray, img) + VLBI.image_residual(KeyedArray, img)
+    @test VLBI.image_clean_with_residual(KeyedArray, img; beam=newbeam) == VLBI.image_clean(KeyedArray, img; beam=newbeam) + VLBI.image_residual(KeyedArray, img)
+
+    xy = with_axiskeys(grid)(SVector, img) |> rand
+    @testset "lazy-mat" for (lazy, materialized) in Any[
+        (VLBI.image_stored(img), VLBI.image_stored(KeyedArray, img)),
+        (VLBI.image_clean(img), VLBI.image_clean(KeyedArray, img)),
+        (VLBI.image_clean(img; beam=newbeam), VLBI.image_clean(KeyedArray, img; beam=newbeam)),
+        (VLBI.image_residual(img), VLBI.image_residual(KeyedArray, img)),
+        (VLBI.image_clean_with_residual(img), VLBI.image_clean_with_residual(KeyedArray, img)),
+        (VLBI.image_clean_with_residual(img; beam=newbeam), VLBI.image_clean_with_residual(KeyedArray, img; beam=newbeam)),
+    ]
+        @test lazy(SVector(0, 0)) > 0
+        @test lazy(SVector(0, 0)) ≈ materialized(0, 0)
+        @test lazy(xy) ≈ materialized(xy...)
+    end
+end
+
 @testitem "img nonstandard header names" begin
     using Unitful, UnitfulAstro, UnitfulAngles
     using StaticArrays
