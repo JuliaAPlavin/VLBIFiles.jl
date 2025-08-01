@@ -196,12 +196,13 @@ end
     @test antarr.name == "VLBA"
     @test map(a -> a.name, antarr.antennas) |> collect == [:BR, :FD, :HN, :KP, :LA, :MK, :NL, :OV, :PT, :SC]
 
+
     @test frequency(uv.freq_windows[1]) == 1.5329522f10u"Hz"
     @test frequency(uv.freq_windows[1], VLBIFiles.Interval) == VLBIFiles.Interval(1.5329522f10u"Hz", 1.5337521f10u"Hz")
 
-    tbl = uvtable(uv; stokes=UniversalSet)
-    @test length(tbl) == 160560
-    tbl = uvtable(uv)
+    tbl_raw = uvtable(uv)
+    @test length(tbl_raw) == 160560
+    tbl = filter(r -> r.stokes ∈ (:RR, :LL), tbl_raw)
     @test length(tbl) == 80280
     @test isconcretetype(eltype(tbl))
     @test tbl[12345] == (
@@ -216,8 +217,8 @@ end
     @test UV(tbl[12345]) == UV(4.282665f6, -2.8318948f7)
     @test VLBI.visibility(tbl[12345]) == (0.48758677f0 - 0.09014242f0im) ±ᵤ 0.040410895f0
 
-    @test first(tbl) == first(uvtable(uv; impl=pyimport))
-    @test tbl == uvtable(uv; impl=pyimport)
+    @test first(tbl_raw) == first(uvtable(uv; impl=pyimport))
+    @test tbl_raw == uvtable(uv; impl=pyimport)
 end
 
 @testitem "closures calculations" begin
@@ -227,7 +228,8 @@ end
     using VLBIFiles.Uncertain
 
     file = joinpath(dirname(pathof(VLBIFiles)), "../test/data/vis.fits")
-    uvtbl = VLBI.load(file) |> uvtable
+    uvtbl_raw = VLBI.load(file) |> uvtable
+    uvtbl = filter(r -> r.stokes ∈ (:RR, :LL), uvtbl_raw)
 
     # compute closures from data:
     gr = @p uvtbl group_vg((;_.freq_spec, _.stokes, _.datetime)) first
