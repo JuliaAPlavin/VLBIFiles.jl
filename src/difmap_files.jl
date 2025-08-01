@@ -1,3 +1,5 @@
+load(T::Type{MultiComponentModel}, fimg::FitsImage) = load(T, fimg.path)
+
 function load(T::Type{MultiComponentModel}, src)
     src = abspath(src)  # for RFC.File
     line = first(eachline(src))

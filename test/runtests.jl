@@ -99,6 +99,8 @@ end
     @test sum(flux, components(mod)) ≈ 0.038659f0u"Jy"
     @test mean(first ∘ coords, components(mod)) ≈ -0.913573508654587u"mas"
     @test mean(last ∘ coords, components(mod)) ≈ 8.145706523588233u"mas"
+
+    @test VLBI.load(MultiComponentModel, VLBI.load("./data/map.fits")) == mod
 end
 
 @testitem "img stacked" begin
