@@ -20,6 +20,7 @@ using Uncertain
 @reexport using InterferometricModels
 @reexport using VLBIData
 import VLBIData: frequency, uvtable
+using Dictionaries
 
 export VLBI, table, uvtable
 
@@ -49,11 +50,11 @@ Core.eval(VLBI, Expr(:export, _names...))
 using ..InterferometricModels
 end
 
-using PrecompileTools
-@compile_workload begin
-    load(joinpath(@__DIR__, "../test/data/map.fits"))
-    load(joinpath(@__DIR__, "../test/data/vis.fits"))
-    load(joinpath(@__DIR__, "../test/data/difmap_model_empty.mod"))
-end
+# using PrecompileTools
+# @compile_workload begin
+#     load(joinpath(@__DIR__, "../test/data/map.fits"))
+#     load(joinpath(@__DIR__, "../test/data/vis.fits"))
+#     load(joinpath(@__DIR__, "../test/data/difmap_model_empty.mod"))
+# end
 
 end

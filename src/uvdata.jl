@@ -64,12 +64,12 @@ function VLBIData.Antenna(hdu_row::NamedTuple)
     if !isempty(hdu_row.ORBPARM) && hdu_row.ORBPARM != 0
         @warn "Antennas with ORBPARM detected, be careful" hdu_row.ORBPARM hdu_row.ANNAME
     end
-    Antenna(; name=Symbol(hdu_row.ANNAME), id=hdu_row.NOSTA, xyz=hdu_row.STABXYZ)
+    Antenna(; name=Symbol(hdu_row.ANNAME), xyz=hdu_row.STABXYZ)
 end
 Base.@kwdef struct AntArray
     name::String
     freq::typeof(1f0u"Hz")
-    antennas::Vector{Antenna}
+    antennas::Dictionary{Int, Antenna}
 end
 
 strfloat_to_float(x::AbstractFloat) = x
@@ -77,7 +77,7 @@ strfloat_to_float(x::String) = parse(Float64, replace(x, "D" => "E"))
 
 function AntArray(hdu::TableHDU)
     header = read_header(hdu)
-    antennas = map(Antenna, hdu |> columntable |> StructArray)
+    antennas = map(row -> row.NOSTA => Antenna(row), hdu |> columntable |> StructArray) |> dictionary
     AntArray(;
         name=header["ARRNAM"],
         freq=strfloat_to_float(header["FREQ"]) * u"Hz",
@@ -91,15 +91,15 @@ Base.getindex(a::AntArray, i::Int) = a.antennas[i]
 function VLBIData.Baseline(array_ix::Integer, ant_ids::NTuple{2, Integer}, ant_arrays::Vector{AntArray})
     ants = ant_arrays[array_ix].antennas
     names = map(ant_ids) do id
-        ix = findfirst(ant -> ant.id == id, ants)
-        if !isnothing(ix)
-            ants[ix].name
+        ant = get(ants, id, nothing)
+        if !isnothing(ant)
+            ant.name
         else
             @warn "Antenna index out of bounds, assigning generated name" length(ants) ant_ids
             Symbol(:ANT, id)
         end
     end
-    Baseline(array_ix, ant_ids, names)
+    Baseline(names)
 end
 
 
@@ -182,11 +182,6 @@ function read_data_arrays(uvdata::UVData, impl=identity)
         data = merge(data, (int_time = raw[:INTTIM] .* u"s",))
     end
     return data
-end
-
-function table(uvdata::UVData, impl=identity)
-    Base.depwarn("table(::UVData) is deprecated, use uvtable(::UVData) instead", :table, force=true)
-    _table(uvdata, impl)
 end
 
 function _table(uvdata::UVData, impl=identity)
