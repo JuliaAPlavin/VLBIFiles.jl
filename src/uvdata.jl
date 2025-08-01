@@ -184,7 +184,7 @@ function read_data_arrays(uvdata::UVData, impl=identity)
     return data
 end
 
-function _table(uvdata::UVData, impl=identity)
+function _table(uvdata::UVData; impl)
     data = read_data_arrays(uvdata, impl)
     @assert ndims(data.visibility) == 4
     
@@ -213,7 +213,7 @@ function _table(uvdata::UVData, impl=identity)
 end
 
 
-uvtable(uvd::UVData; stokes=(:I, :LL, :RR)) = @p uvd _table filter(_.stokes ∈ stokes) map((;
+uvtable(uvd::UVData; stokes=(:I, :LL, :RR), impl=identity) = @p uvd _table(;impl) filter(_.stokes ∈ stokes) map((;
 	_.datetime, _.stokes, _.freq_spec,
 	spec=VisSpec(_.baseline, UV(_.uv)),
 	value=U.Value(_.visibility, 1/√_.weight),

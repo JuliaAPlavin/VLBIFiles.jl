@@ -196,36 +196,6 @@ end
     @test frequency(uv.freq_windows[1]) == 1.5329522f10u"Hz"
     @test frequency(uv.freq_windows[1], VLBIFiles.Interval) == VLBIFiles.Interval(1.5329522f10u"Hz", 1.5337521f10u"Hz")
 
-    # old table extraction:
-    df = table(uv)
-    @test Tables.rowaccess(df)
-    @test length(df) == 160560
-    @test all(∈(Tables.schema(df).names), [:uv, :visibility, :freq_spec, :datetime])
-    @test all(isconcretetype, Tables.schema(df).types)
-    @test df[1].uv === UV(-6.4672084f7, 8.967541f7)
-    target = (
-        baseline = VLBI.Baseline((:OV, :PT)),
-        datetime = DateTime("2010-12-24T04:57:34.999"),
-        stokes = :RR,
-        freq_spec = VLBI.FrequencyWindow(1, 1.5329522f10u"Hz", 8.0f6u"Hz", 1, 1),
-        uv_m = UV(417953.38f0u"m", 860236.9f0u"m"),
-        w_m = -179245.12f0u"m",
-        uv = UV(2.1377114f7, 4.3998644f7),
-        w = -9.167873f6,
-        visibility = 0.4755191f0 + 0.0043343306f0im,
-        weight = 946.5216f0
-    )
-    res = filter(r -> r.baseline == target.baseline && r.datetime == target.datetime && r.freq_spec == target.freq_spec && r.stokes == target.stokes, df) |> only
-    @test res == target
-    @test map(typeof, res) == map(typeof, target)
-    df_cols = Tables.columntable(df)
-    @test mean(df_cols.uv_m) ≈ SVector(-174221.2u"m", 314413.6u"m")
-    @test mean(v->abs.(v), df_cols.uv) ≈ UV(1.0778852f8, 7.967933f7)
-    @test mean(df_cols.visibility) ≈ 0.2495917 + 0.0010398296im
-    @test first(df) == first(table(uv, pyimport))
-    @test df == table(uv, pyimport)
-
-    # new table extraction:
     tbl = uvtable(uv; stokes=UniversalSet)
     @test length(tbl) == 160560
     tbl = uvtable(uv)
@@ -238,10 +208,13 @@ end
         spec = VLBI.VisSpec(VLBI.Baseline((:FD, :PT)), UV([4.282665f6, -2.8318948f7])),
         value = (0.48758677f0 - 0.09014242f0im) ±ᵤ 0.040410895f0
     )
-    @test VLBI.antennas(tbl[12345]) == (VLBI.Antenna(:FD, SVector(NaN, NaN, NaN)), VLBI.Antenna(:PT, SVector(NaN, NaN, NaN)))
+    @test VLBI.antenna_names(tbl[12345]) == (:FD, :PT)
     @test VLBI.Baseline(tbl[12345]) == VLBI.Baseline((:FD, :PT))
     @test UV(tbl[12345]) == UV(4.282665f6, -2.8318948f7)
     @test VLBI.visibility(tbl[12345]) == (0.48758677f0 - 0.09014242f0im) ±ᵤ 0.040410895f0
+
+    @test first(tbl) == first(uvtable(uv; impl=pyimport))
+    @test tbl == uvtable(uv; impl=pyimport)
 end
 
 @testitem "closures calculations" begin
@@ -285,6 +258,7 @@ end
     using Unitful, UnitfulAstro, UnitfulAngles
     using Dates
     using PyCall
+    using VLBIFiles.Uncertain
     using Statistics
     using StaticArrays
     using Tables
@@ -292,29 +266,25 @@ end
 
     uv = VLBI.load(VLBI.UVData, "./data/vis_multichan.vis")
     @test length(uv.freq_windows) == 8
-    df = table(uv)
+    df = uvtable(uv)
     target = (
-        baseline = VLBI.Baseline((:HN, :LA)),
         datetime = DateTime("1996-06-05T19:16:45.001"),
         stokes = :LL,
         freq_spec = VLBI.FrequencyWindow(3, 4.84099f9u"Hz", 8.0f6u"Hz", 16, 1),
-        uv_m = UV(2.2424022f6u"m", 794705.06f0u"m"),
-        w_m = -1.838948f6u"m",
-        uv = UV(3.6239796f7, 1.2843347f7),
-        w = -2.9719512f7,
-        visibility = -0.21484283f0 - 0.35979474f0im,
-        weight = 3.0233376f0
+        spec = VLBI.VisSpec(VLBI.Baseline((:HN, :LA)), UV([3.6239796f7, 1.2843347f7])),
+        value = (-0.21484283f0 - 0.35979474f0im) ±ᵤ (1/√3.0233376f0)
     )
-    res = filter(r -> r.baseline == target.baseline && r.datetime == target.datetime && r.freq_spec == target.freq_spec && r.stokes == target.stokes, df)[1]
+    res = filter(r -> VLBI.Baseline(r) == VLBI.Baseline((:HN, :LA)) && r.datetime == target.datetime && r.freq_spec == target.freq_spec && r.stokes == target.stokes, df)[1]
     @test res == target
     @test map(typeof, res) == map(typeof, target)
-    @test df == table(uv, pyimport)
+    @test df == uvtable(uv; impl=pyimport)
 end
 
 @testitem "uvf EHT 1" begin
     using Unitful, UnitfulAstro, UnitfulAngles
     using Dates
     using PyCall
+    using VLBIFiles.Uncertain
     using Statistics
     using StaticArrays
     using Tables
@@ -322,18 +292,25 @@ end
 
     uv = VLBI.load(VLBI.UVData, "./data/hops_3600_OJ287_LO+HI.medcal_dcal_full.uvfits")
     @test length(uv.freq_windows) == 2
-    df = table(uv)
-    target = (baseline = VLBI.Baseline((:AP, :AZ)), datetime = Dates.DateTime("2017-04-10T00:58:45.005"), stokes = :RR, freq_spec = VLBI.FrequencyWindow(1, 2.270707f11u"Hz", 1.856f9u"Hz", 1, 1), uv_m = UV(3.9143352f6u"m", -5.933179f6u"m"), w_m = 0.0f0u"m", uv = UV(2.9769375f9, -4.5123123f9), w = 0.0f0, visibility = 0.5662228f0 + 0.014944182f0im, weight = 117.818825f0)
-    res = filter(r -> r.baseline == target.baseline && r.datetime == target.datetime && r.freq_spec == target.freq_spec && r.stokes == target.stokes, df)[1]
+    df = uvtable(uv)
+    target = (
+        datetime = Dates.DateTime("2017-04-10T00:58:45.005"), 
+        stokes = :RR, 
+        freq_spec = VLBI.FrequencyWindow(1, 2.270707f11u"Hz", 1.856f9u"Hz", 1, 1), 
+        spec = VLBI.VisSpec(VLBI.Baseline((:AP, :AZ)), UV([2.9769375f9, -4.5123123f9])), 
+        value = (0.5662228f0 + 0.014944182f0im) ±ᵤ (1/√117.818825f0)
+    )
+    res = filter(r -> VLBI.Baseline(r) == VLBI.Baseline((:AP, :AZ)) && r.datetime == target.datetime && r.freq_spec == target.freq_spec && r.stokes == target.stokes, df)[1]
     @test res == target
     @test map(typeof, res) == map(typeof, target)
-    @test df == table(uv, pyimport)
+    @test df == uvtable(uv; impl=pyimport)
 end
 
 @testitem "uvf EHT 2" begin
     using Unitful, UnitfulAstro, UnitfulAngles
     using Dates
     using PyCall
+    using VLBIFiles.Uncertain
     using Statistics
     using StaticArrays
     using Tables
@@ -341,12 +318,18 @@ end
 
     uv = VLBI.load(VLBI.UVData, "./data/SR1_3C279_2017_101_hi_hops_netcal_StokesI.uvfits")
     @test length(uv.freq_windows) == 1
-    df = table(uv)
-    target = (baseline = VLBI.Baseline((:AA, :AP)), datetime = Dates.DateTime("2017-04-11T02:14:55"), stokes = :RR, freq_spec = VLBI.FrequencyWindow(1, 2.290707f11u"Hz", 1.856f9u"Hz", 1, 1), uv_m = UV(895.6223f0u"m", -2436.5188f0u"m"), w_m = 0.0f0u"m", uv = UV(687115.25f0, -1.8692805f6), w = 0.0f0, visibility = -1.1796279f0 - 7.8919725f0im, weight = 40441.19f0)
-    res = filter(r -> r.baseline == target.baseline && r.datetime == target.datetime && r.freq_spec == target.freq_spec && r.stokes == target.stokes, df)[1]
+    df = uvtable(uv)
+    target = (
+        datetime = Dates.DateTime("2017-04-11T02:14:55"), 
+        stokes = :RR, 
+        freq_spec = VLBI.FrequencyWindow(1, 2.290707f11u"Hz", 1.856f9u"Hz", 1, 1), 
+        spec = VLBI.VisSpec(VLBI.Baseline((:AA, :AP)), UV([687115.25f0, -1.8692805f6])), 
+        value = (-1.1796279f0 - 7.8919725f0im) ±ᵤ (1/√40441.19f0)
+    )
+    res = filter(r -> VLBI.Baseline(r) == VLBI.Baseline((:AA, :AP)) && r.datetime == target.datetime && r.freq_spec == target.freq_spec && r.stokes == target.stokes, df)[1]
     @test res == target
     @test map(typeof, res) == map(typeof, target)
-    @test df == table(uv, pyimport)
+    @test df == uvtable(uv; impl=pyimport)
 end
 
 @testitem "uvf EHT 3" begin
@@ -360,9 +343,9 @@ end
 
     uv = VLBI.load(VLBI.UVData, "./data/datafile_01-01_230GHz.uvfits")
     @test length(uv.freq_windows) == 1
-    df = table(uv)
-    @test df[1].visibility ≈ -0.0061733737f0 + 0.052109245f0im
-    @test df == table(uv, pyimport)
+    df = uvtable(uv)
+    @test VLBI.visibility(df[1]) ≈ -0.0061733737f0 + 0.052109245f0im
+    @test df == uvtable(uv; impl=pyimport)
 end
 
 @testitem "difmap model" begin
@@ -406,8 +389,8 @@ end
 #         @showprogress for f in RFC.files(rfci, suffix="vis")
 #             try
 #                 uv = VLBI.load(f)
-#                 df = table(uv)
-#                 @test df == table(uv, pyimport)
+#                 df = uvtable(uv)
+#                 @test df == uvtable(uv; impl=pyimport)
 #             catch e
 #                 @show abspath(f) e
 #                 rethrow()
