@@ -221,6 +221,32 @@ end
     @test tbl_raw == uvtable(uv; impl=pyimport)
 end
 
+@testitem "uvf antenna polarization" begin
+    using Unitful, UnitfulAstro, UnitfulAngles
+    using Dates
+    using VLBIFiles.Uncertain
+    using Statistics
+    using StaticArrays
+    using DataManipulation
+    cd(dirname(@__FILE__))
+
+    uv = VLBI.load(VLBI.UVData, "./data/vis.fits")
+    antarr = only(uv.ant_arrays)
+    @test antarr[2].name == :FD
+    @test antarr[2].poltypes == (:R, :L)
+
+    tbl = uvtable(uv)
+    @test antenna_names(tbl[1]) == (:FD, :HN)
+    @test tbl[1].stokes == :RR
+    @test tbl[1].value ≈ (0.54561967f0 - 0.03217088f0im) ±ᵤ 0.03644394f0
+
+    uv_upd = @set only(uv.ant_arrays)[2].poltypes = (:X, :Y)
+    tbl = uvtable(uv_upd)
+    @test antenna_names(tbl[1]) == (:FD, :HN)
+    @test tbl[1].stokes == :XR
+    @test tbl[1].value ≈ (0.54561967f0 - 0.03217088f0im) ±ᵤ 0.03644394f0
+end
+
 @testitem "closures calculations" begin
     # using VLBIDataExtra: read_uvtbl, closures_a_single, closures_a_all, closures_p_single, closures_p_all
     # import VLBIDataExtra: VLBIData
