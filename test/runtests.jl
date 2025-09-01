@@ -279,11 +279,15 @@ end
 
     cla_all = VLBI.VLBIData.closures_all(ClosureAmpSpec, uvtbl)
     @test length(cla_all) == 507852
-    @test (@p cla_all group_vg((;_.freq_spec, _.stokes, _.datetime)) first) == cla_gr
+    @test isconcretetype(eltype(cla_all))
+    nt = NamedTuple{fieldnames(eltype(cla_gr))}
+    @test (@p cla_all group_vg((;_.freq_spec, _.stokes, _.datetime)) first map(nt)) == collect(cla_gr)
 
     clp_all = VLBI.VLBIData.closures_all(ClosurePhaseSpec, uvtbl)
     @test length(clp_all) == 146772
-    @test (@p clp_all group_vg((;_.freq_spec, _.stokes, _.datetime)) first) == clp_gr
+    @test isconcretetype(eltype(clp_all))
+    nt = NamedTuple{fieldnames(eltype(clp_gr))}
+    @test (@p clp_all group_vg((;_.freq_spec, _.stokes, _.datetime)) first map(nt)) == collect(clp_gr)
 end
 
 
