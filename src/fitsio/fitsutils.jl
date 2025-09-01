@@ -27,7 +27,7 @@ end
 
 axes_dicts_all(fh::FITSHeader) = @p axis_types(fh) map(axis_dict(fh, _))
 
-function axis_dict(fh::FITSHeader, ctype::AbstractString)
+function axis_dict(fh::FITSHeader, ctype)
     ind = axis_ind(fh, ctype)
     re = (@oget fh["XTENSION"]) == "BINTABLE" ?
         Regex("^(MAXIS|CTYPE|CDELT|CRPIX|CRVAL)$(ind)\$") :  # fits idi / bintables in general
