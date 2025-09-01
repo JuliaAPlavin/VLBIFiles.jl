@@ -22,6 +22,8 @@ function frequency(fw::FrequencyWindow, ::Type{Interval})
 	return fw.freq .. (fw.freq + fw.width)
 end
 
+Base.isless(a::FrequencyWindow, b::FrequencyWindow) = a.freq < b.freq
+
 Statistics.mean(xs::AbstractVector{<:FrequencyWindow}) = FrequencyWindow(
     first(xs).ix,
 	(@p xs map(_.freq) mean),
