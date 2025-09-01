@@ -7,29 +7,29 @@ Base.@kwdef struct FrequencyWindow
 end
 
 frequency(fw::FrequencyWindow, kind::Symbol=:reference) = if kind == :reference
-	fw.freq
+    fw.freq
 elseif kind == :average
-	@assert fw.sideband == 1
-	@assert fw.nchan > 0
-	fw.freq + fw.width / 2
+    @assert fw.sideband == 1
+    @assert fw.nchan > 0
+    fw.freq + fw.width / 2
 else
-	error("Unsupported kind: $kind")
+    error("Unsupported kind: $kind")
 end
 
 function frequency(fw::FrequencyWindow, ::Type{Interval})
-	@assert fw.sideband == 1
-	@assert fw.nchan > 0
-	return fw.freq .. (fw.freq + fw.width)
+    @assert fw.sideband == 1
+    @assert fw.nchan > 0
+    return fw.freq .. (fw.freq + fw.width)
 end
 
 Base.isless(a::FrequencyWindow, b::FrequencyWindow) = a.freq < b.freq
 
 Statistics.mean(xs::AbstractVector{<:FrequencyWindow}) = FrequencyWindow(
     first(xs).ix,
-	(@p xs map(_.freq) mean),
-	(@p xs map(_.width) sum),
-	(@p xs map(_.nchan) sum),
-	(@p xs map(_.sideband) uniqueonly),
+    (@p xs map(_.freq) mean),
+    (@p xs map(_.width) sum),
+    (@p xs map(_.nchan) sum),
+    (@p xs map(_.sideband) uniqueonly),
 )
 
 Base.@kwdef struct UVHeader
@@ -44,16 +44,15 @@ frequency(h::UVHeader) = h.frequency
 Dates.Date(h::UVHeader) = h.date_obs
 
 function UVHeader(fh::FITSHeader)
-	if fh["XTENSION"] == "BINTABLE" && fh["EXTNAME"] == "UV_DATA"
-		# FITS IDI
-	else
-		# uvfits
-	    @assert fh["CTYPE6"] == "RA" && fh["CTYPE7"] == "DEC"
-	    @assert fh["CTYPE4"] == "FREQ"
-	    @assert fh["CTYPE2"] == "COMPLEX" && fh["NAXIS2"] == 3
-	end
+    if fh["XTENSION"] == "BINTABLE" && fh["EXTNAME"] == "UV_DATA"
+        # FITS IDI
+    else
+        # uvfits
+        @assert fh["CTYPE6"] == "RA" && fh["CTYPE7"] == "DEC"
+        @assert fh["CTYPE4"] == "FREQ"
+        @assert fh["CTYPE2"] == "COMPLEX" && fh["NAXIS2"] == 3
+    end
 
-    val_to_stokes = Dict(-4=>:LR, -3=>:RL, -2=>:LL, -1=>:RR, 1=>:I, 2=>:Q, 3=>:U, 4=>:V)
     stokes = [val_to_stokes[val] for val in axis_vals(fh, "STOKES")]
     date_obs = match(r"([\d-]+)(\(\d+\))?", fh["DATE-OBS"]).captures[1]
 
@@ -71,7 +70,7 @@ function VLBIData.Antenna(hdu_row::NamedTuple)
     if !isempty(hdu_row.ORBPARM) && hdu_row.ORBPARM != 0
         @warn "Antennas with ORBPARM detected, be careful" hdu_row.ORBPARM hdu_row.ANNAME
     end
-	poltypes = haskey(hdu_row, :POLTYA) ? Symbol.((hdu_row.POLTYA, hdu_row.POLTYB)) : (:UNK, :UNK)
+    poltypes = haskey(hdu_row, :POLTYA) ? Symbol.((hdu_row.POLTYA, hdu_row.POLTYB)) : (:UNK, :UNK)
     Antenna(; name=Symbol(hdu_row.ANNAME), xyz=hdu_row.STABXYZ, mount_type=VLBIData.AntennaMountType.T(hdu_row.MNTSTA), poltypes)
 end
 Base.@kwdef struct AntArray
@@ -101,14 +100,14 @@ ant_by_name(a::AntArray, name::Symbol) = filteronly(ant -> ant.name == name, a.a
 
 function Baseline_from_fits(b::Real)
     bi = floor(Int, b)
-	a1, a2 = bi ÷ 256, bi % 256
-	return Baseline((a1, a2))
+    a1, a2 = bi ÷ 256, bi % 256
+    return Baseline((a1, a2))
 end
 function Baseline_from_fits(b::Real, antarrays)
     bi = floor(Int, b)
     arri = floor(Int, (b % 1) * 100) + 1
-	a1, a2 = bi ÷ 256, bi % 256
-	return Baseline(1, (a1, a2), antarrays)
+    a1, a2 = bi ÷ 256, bi % 256
+    return Baseline(1, (a1, a2), antarrays)
 end
 
 function VLBIData.Baseline(array_ix::Integer, ant_ids::NTuple{2, Integer}, ant_arrays::Vector{AntArray})
@@ -254,9 +253,9 @@ end
 
 
 uvtable(uvd::UVData; impl=identity) = @p uvd _table(;impl) map((;
-	_.datetime, _.stokes, _.freq_spec,
-	spec=VisSpec(_.baseline, UV(_.uv)),
-	value=U.Value(_.visibility, 1/√_.weight),
+    _.datetime, _.stokes, _.freq_spec,
+    spec=VisSpec(_.baseline, UV(_.uv)),
+    value=U.Value(_.visibility, 1/√_.weight),
 ))
 
 function load(::Type{UVData}, path)

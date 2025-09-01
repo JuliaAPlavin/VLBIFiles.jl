@@ -411,6 +411,7 @@ end
 end
 
 @testitem "FITS IDI" begin
+    using AxisKeys
     using VLBIFiles: FITSIO
     using Dates
 
@@ -422,6 +423,8 @@ end
     @test raw[12345] isa NamedTuple
     @test raw.SOURCE[1234] == 2
     @test raw.SOURCE isa VLBIFiles.TableHDUColumn
+    @test named_axiskeys(raw.FLUX[1234]) == (COMPLEX = [:re, :im], STOKES = [:RR], FREQ = 2.220125e9:500000.0:2.251625e9, BAND = 1.0:1.0:16.0, RA = StepRangeLen(0.0, 0.0, 1), DEC = StepRangeLen(0.0, 0.0, 1))
+    @test named_axiskeys(raw.WEIGHT[1234]) == (STOKES = [:RR], BAND = 1.0:1.0:16.0)
     
     fits = FITSIO.FITS(uvf)
     hdu = fits["UV_DATA"]
