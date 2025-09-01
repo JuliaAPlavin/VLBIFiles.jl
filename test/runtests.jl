@@ -410,6 +410,17 @@ end
     @test ICRSCoords(uv) ≈ ICRSCoords(187.70595|>deg2rad, 12.39112|>deg2rad)
 end
 
+@testitem "FITS IDI" begin
+    p = "/Users/aplavin/Downloads/VLBA_UG002O_ug002o_BIN0_SRC0_0_180821T142741.idifits"
+    uvf = VLBI.load(VLBI.UVData, p)
+    @test VLBI.load(p) isa VLBI.UVData
+    raw = VLBI.read_data_raw(uvf)
+    @test length(raw) == 1455779
+    @test raw[12345] isa NamedTuple
+    @test raw.SOURCE[1234] == 2
+    @test raw.SOURCE isa VLBIFiles.TableHDUColumn
+end
+
 @testitem "difmap model" begin
     using Unitful, UnitfulAstro, UnitfulAngles
     cd(dirname(@__FILE__))

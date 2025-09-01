@@ -3,7 +3,7 @@ module VLBIFiles
 using Reexport
 using DataManipulation
 using Tables
-import Tables: table
+import Tables: table, columnnames
 using FITSIO: FITSHeader, FITS, TableHDU, read_header, colnames, FITSIO
 using Dates
 using Unitful, UnitfulAstro, UnitfulAngles
@@ -26,6 +26,7 @@ export VLBI, table, uvtable
 
 include("fitsio/grouphdu.jl")
 include("fitsio/fitsutils.jl")
+include("fitsio/lazy_table.jl")
 
 include("uvdata.jl")
 include("fitsimage.jl")

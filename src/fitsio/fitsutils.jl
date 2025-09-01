@@ -1,3 +1,10 @@
+using FITSIO: fits_get_num_rows, TableHDU, assert_open, fits_movabs_hdu, fits_get_colnum, fits_get_col_info, CFITSIO, fits_try_read_extname
+
+function name(hdu::FITSIO.HDU)
+    fits_movabs_hdu(hdu.fitsfile, hdu.ext)
+    return fits_try_read_extname(hdu.fitsfile)
+end
+
 axis_types(fh::FITSHeader) = @p begin
     pairs(fh)
     filtermap() do (k, v)
