@@ -50,7 +50,7 @@ frequency(h::UVHeader) = h.frequency
 Dates.Date(h::UVHeader) = h.date_obs
 
 function UVHeader(fh::FITSHeader)
-    if fh["XTENSION"] == "BINTABLE" && fh["EXTNAME"] == "UV_DATA"
+    if (@oget fh["XTENSION"]) == "BINTABLE" && (@oget fh["EXTNAME"]) == "UV_DATA"
         # FITS IDI
     else
         # uvfits
