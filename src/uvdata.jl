@@ -22,6 +22,12 @@ function frequency(fw::FrequencyWindow, ::Type{Interval})
     return fw.freq .. (fw.freq + fw.width)
 end
 
+function frequencies(fw::FrequencyWindow)
+    @assert fw.sideband == 1
+    @assert fw.nchan > 0
+    return Float64(fw.freq) .+ (0.5:(fw.nchan-0.5)) .* (fw.width/fw.nchan)
+end
+
 Base.isless(a::FrequencyWindow, b::FrequencyWindow) = a.freq < b.freq
 
 Statistics.mean(xs::AbstractVector{<:FrequencyWindow}) = FrequencyWindow(

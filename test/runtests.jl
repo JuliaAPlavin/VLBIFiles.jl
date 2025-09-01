@@ -216,6 +216,7 @@ end
 
     @test frequency(uv.freq_windows[1]) == 1.5329522f10u"Hz"
     @test frequency(uv.freq_windows[1], VLBIFiles.Interval) == VLBIFiles.Interval(1.5329522f10u"Hz", 1.5337521f10u"Hz")
+    @test VLBIFiles.frequencies(uv.freq_windows[1]) == (1.5333521664e10:8.0e6:1.5333521664e10)u"Hz"
 
     tbl_raw = uvtable(uv)
     @test length(tbl_raw) == 160560
@@ -319,6 +320,7 @@ end
 
     uv = VLBI.load(VLBI.UVData, "./data/vis_multichan.vis")
     @test length(uv.freq_windows) == 8
+    @test VLBIFiles.frequencies(uv.freq_windows[1]) == (4.601240208e9:500000.0:4.608740208e9)u"Hz"
     df = uvtable(uv)
     target = (
         datetime = DateTime("1996-06-05T19:16:45.001"),
