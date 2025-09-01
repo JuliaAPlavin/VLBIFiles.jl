@@ -131,6 +131,9 @@ function VLBIData.Baseline(array_ix::Integer, ant_ids::NTuple{2, Integer}, ant_a
 end
 
 
+DateTime_from_DATE_TIME(DATE, TIME) = julian_day(Float64(DATE) + TIME)
+
+
 Base.@kwdef struct UVData
     path::String
     header::Union{UVHeader,Nothing}
