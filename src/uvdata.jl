@@ -34,7 +34,7 @@ Statistics.mean(xs::AbstractVector{<:FrequencyWindow}) = FrequencyWindow(
 
 Base.@kwdef struct UVHeader
     fits::FITSHeader
-    object::String
+    object::Union{String,Nothing}
     date_obs::Date
     stokes::Vector{Symbol}
     frequency::typeof(1.0u"Hz")
@@ -44,9 +44,14 @@ frequency(h::UVHeader) = h.frequency
 Dates.Date(h::UVHeader) = h.date_obs
 
 function UVHeader(fh::FITSHeader)
-    @assert fh["CTYPE6"] == "RA" && fh["CTYPE7"] == "DEC"
-    @assert fh["CTYPE4"] == "FREQ"
-    @assert fh["CTYPE2"] == "COMPLEX" && fh["NAXIS2"] == 3
+	if fh["XTENSION"] == "BINTABLE" && fh["EXTNAME"] == "UV_DATA"
+		# FITS IDI
+	else
+		# uvfits
+	    @assert fh["CTYPE6"] == "RA" && fh["CTYPE7"] == "DEC"
+	    @assert fh["CTYPE4"] == "FREQ"
+	    @assert fh["CTYPE2"] == "COMPLEX" && fh["NAXIS2"] == 3
+	end
 
     val_to_stokes = Dict(-4=>:LR, -3=>:RL, -2=>:LL, -1=>:RR, 1=>:I, 2=>:Q, 3=>:U, 4=>:V)
     stokes = [val_to_stokes[val] for val in axis_vals(fh, "STOKES")]
@@ -54,7 +59,7 @@ function UVHeader(fh::FITSHeader)
 
     return UVHeader(
         fits=fh,
-        object=fh["OBJECT"],
+        object=(@oget fh["OBJECT"]),
         date_obs=Date(date_obs, dateformat"Y-m-d"),
         stokes=stokes,
         frequency=axis_dict(fh, "FREQ")["CRVAL"]*u"Hz",
@@ -128,6 +133,8 @@ Base.@kwdef struct UVData
     ant_arrays::Vector{AntArray}
 end
 
+FITSIO.FITS(uvdata::UVData) = FITS(uvdata.path)
+
 function read_freqs(uvh, fq_table)
     fq_row = fq_table |> columntable |> StructArray |> only
     # fq_row = fq_row[Symbol.(["IF FREQ", "CH WIDTH", "TOTAL BANDWIDTH", "SIDEBAND"])]
@@ -153,7 +160,7 @@ end
 
 
 function read_data_raw(uvdata::UVData, ::typeof(identity)=identity)
-    fits = FITS(uvdata.path)
+    fits = FITS(uvdata)
     if haskey(fits, "UV_DATA")
         return fits["UV_DATA"] |> lazycolumntable |> StructArray
     end
@@ -255,12 +262,19 @@ uvtable(uvd::UVData; impl=identity) = @p uvd _table(;impl) map((;
 function load(::Type{UVData}, path)
     path = abspath(path)  # for RFC.File
     fits = FITS(path)
-    fh = read_header(fits[1])
-    header = try
-        UVHeader(fh)
-    catch e
-        e isa KeyError || rethrow()
-        nothing
+    header = let
+        fh = read_header(fits[1])
+        if haskey(fh, "CORRELAT")
+            # fits idi
+            fh = read_header(fits["UV_DATA"])
+        end
+        try
+            UVHeader(fh)
+        catch e
+            e isa KeyError || rethrow()
+            rethrow()
+            nothing
+        end
     end
     freq_windows = read_freqs(header, @oget fits["AIPS FQ"] fits["FREQUENCY"])
     ant_arrays = AntArray[]
