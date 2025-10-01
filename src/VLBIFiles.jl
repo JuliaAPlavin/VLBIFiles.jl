@@ -18,6 +18,7 @@ using PyFormattedStrings
 using Statistics
 using Uncertain
 @reexport using InterferometricModels
+using InterferometricModels: components
 @reexport using VLBIData
 import VLBIData: frequency, uvtable
 using Dictionaries
