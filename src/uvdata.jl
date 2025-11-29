@@ -1,4 +1,5 @@
 Base.@kwdef struct FrequencyWindow
+    freqid::Int
     ix::Int
     freq::typeof(1f0u"Hz")
     width::typeof(1f0u"Hz")
@@ -31,6 +32,7 @@ end
 Base.isless(a::FrequencyWindow, b::FrequencyWindow) = a.freq < b.freq
 
 Statistics.mean(xs::AbstractVector{<:FrequencyWindow}) = FrequencyWindow(
+    first(xs).freqid,
     first(xs).ix,
     (@p xs map(_.freq) mean),
     (@p xs map(_.width) sum),
@@ -50,7 +52,7 @@ frequency(h::UVHeader) = h.frequency
 Dates.Date(h::UVHeader) = h.date_obs
 
 function UVHeader(fh::FITSHeader)
-    if (@oget fh["XTENSION"]) == "BINTABLE" && (@oget fh["EXTNAME"]) == "UV_DATA"
+    if (@oget fh["XTENSION"]) == "BINTABLE" && (@oget fh["EXTNAME"]) ∈ ["UV_DATA", "AIPS UV"]
         # FITS IDI
     else
         # uvfits
@@ -144,26 +146,29 @@ end
 FITSIO.FITS(uvdata::UVData) = FITS(uvdata.path)
 
 function read_freqs(uvh, fq_table)
-    fq_row = fq_table |> columntable |> StructArray |> only
-    # fq_row = fq_row[Symbol.(["IF FREQ", "CH WIDTH", "TOTAL BANDWIDTH", "SIDEBAND"])]
-    nrows = @p fq_row values() filter(_ isa AbstractVector) (isempty(__) ? 1 : length(__[1]))
-    fq_row = map(fq_row) do x
-        isa(x, AbstractArray) ? x : fill(x, nrows)
-    end
     ref_freq = @oget frequency(uvh) read_header(fq_table)["REF_FREQ"]*u"Hz"
-    res = map(fq_row |> rowtable |> enumerate) do (ix, r)
-        total_bw = @oget r[S"TOTAL BANDWIDTH"] r[S"TOTAL_BANDWIDTH"]
-        ch_width = @oget r[S"CH WIDTH"] r[S"CH_WIDTH"]
-        curfreq = @oget r[S"IF FREQ"] r[S"BANDFREQ"]
-        nchan = Int(total_bw / ch_width)
-        FrequencyWindow(;
-            ix,
-            freq=ref_freq + curfreq * u"Hz",
-            width=total_bw * u"Hz",
-            nchan,
-            sideband=r.SIDEBAND,
-        )
-    end
+	fq_table = fq_table |> StructArrays.fromtable
+    res = @p fq_table flatmap() do fq_row
+		subrows = if any(x->x isa AbstractVector, fq_row)
+			@p fq_row |> filter(_ isa AbstractVector) |> rowtable
+		else
+			[fq_row]
+		end
+		@p subrows |> enumerate |> map() do (ix, r)
+	        total_bw = @oget r[S"TOTAL BANDWIDTH"] r[S"TOTAL_BANDWIDTH"]
+	        ch_width = @oget r[S"CH WIDTH"] r[S"CH_WIDTH"]
+	        curfreq = @oget r[S"IF FREQ"] r[S"BANDFREQ"]
+	        nchan = Int(total_bw / ch_width)
+	        FrequencyWindow(;
+                freqid=(@oget r.FREQID 1),
+	            ix,
+	            freq=ref_freq + curfreq * u"Hz",
+	            width=total_bw * u"Hz",
+	            nchan,
+	            sideband=r.SIDEBAND,
+	        )
+	    end
+	end
 end
 
 
@@ -271,10 +276,12 @@ function load(::Type{UVData}, path)
     path = abspath(path)  # for RFC.File
     fits = FITS(path)
     header = let
-        fh = read_header(fits[1])
-        if haskey(fh, "CORRELAT")
-            # fits idi
-            fh = read_header(fits["UV_DATA"])
+        fh = if haskey(fits, "UV_DATA")
+            read_header(fits["UV_DATA"])  # fits idi
+        elseif haskey(fits, "AIPS UV")
+            read_header(fits["AIPS UV"])  # VLA uvfits?.. don't really work
+        else
+            read_header(fits[1])  # uvfits
         end
         try
             UVHeader(fh)

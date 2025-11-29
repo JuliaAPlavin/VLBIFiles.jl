@@ -227,7 +227,7 @@ end
     @test tbl[12345] == (
         datetime = DateTime("2010-12-24T08:06:25"),
         stokes = :RR,
-        freq_spec = VLBI.FrequencyWindow(6, 1.5369459f10u"Hz", 8.0f6u"Hz", 1, 1),
+        freq_spec = VLBI.FrequencyWindow(1, 6, 1.5369459f10u"Hz", 8.0f6u"Hz", 1, 1),
         spec = VLBI.VisSpec(VLBI.Baseline((:FD, :PT)), UV([4.282665f6, -2.8318948f7])),
         value = (0.48758677f0 - 0.09014242f0im) ±ᵤ 0.040410895f0
     )
@@ -325,7 +325,7 @@ end
     target = (
         datetime = DateTime("1996-06-05T19:16:45.001"),
         stokes = :LL,
-        freq_spec = VLBI.FrequencyWindow(3, 4.84099f9u"Hz", 8.0f6u"Hz", 16, 1),
+        freq_spec = VLBI.FrequencyWindow(1, 3, 4.84099f9u"Hz", 8.0f6u"Hz", 16, 1),
         spec = VLBI.VisSpec(VLBI.Baseline((:HN, :LA)), UV([3.6239796f7, 1.2843347f7])),
         value = (-0.21484283f0 - 0.35979474f0im) ±ᵤ (1/√3.0233376f0)
     )
@@ -352,7 +352,7 @@ end
     target = (
         datetime = Dates.DateTime("2017-04-10T00:58:45.005"), 
         stokes = :RR, 
-        freq_spec = VLBI.FrequencyWindow(1, 2.270707f11u"Hz", 1.856f9u"Hz", 1, 1), 
+        freq_spec = VLBI.FrequencyWindow(1, 1, 2.270707f11u"Hz", 1.856f9u"Hz", 1, 1), 
         spec = VLBI.VisSpec(VLBI.Baseline((:AP, :AZ)), UV([2.9769375f9, -4.5123123f9])), 
         value = (0.5662228f0 + 0.014944182f0im) ±ᵤ (1/√117.818825f0)
     )
@@ -381,7 +381,7 @@ end
     target = (
         datetime = Dates.DateTime("2017-04-11T02:14:55"), 
         stokes = :RR, 
-        freq_spec = VLBI.FrequencyWindow(1, 2.290707f11u"Hz", 1.856f9u"Hz", 1, 1), 
+        freq_spec = VLBI.FrequencyWindow(1, 1, 2.290707f11u"Hz", 1.856f9u"Hz", 1, 1), 
         spec = VLBI.VisSpec(VLBI.Baseline((:AA, :AP)), UV([687115.25f0, -1.8692805f6])), 
         value = (-1.1796279f0 - 7.8919725f0im) ±ᵤ (1/√40441.19f0)
     )
@@ -417,9 +417,12 @@ end
     using VLBIFiles: FITSIO
     using Dates
 
-    p = "/Users/aplavin/Downloads/VLBA_UG002O_ug002o_BIN0_SRC0_0_180821T142741.idifits"
+    p = "/Users/aplavin/work/galactic_scatter/2005+403/data/archival/vlba/UG002/VLBA_UG002O_ug002o_BIN0_SRC0_0_180821T142741.idifits"
     uvf = VLBI.load(VLBI.UVData, p)
     @test VLBI.load(p) isa VLBI.UVData
+    
+    @test length(uvf.freq_windows) == 16
+
     raw = VLBI.read_data_raw(uvf)
     @test length(raw) == 1455779
     @test raw[12345] isa NamedTuple
