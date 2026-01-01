@@ -29,7 +29,7 @@ axes_dicts_all(fh::FITSHeader) = @p axis_types(fh) map(axis_dict(fh, _))
 
 function axis_dict(fh::FITSHeader, ctype::AbstractString)
     ind = axis_ind(fh, ctype)
-    re = fh["XTENSION"] == "BINTABLE" ?
+    re = (@oget fh["XTENSION"]) == "BINTABLE" ?
         Regex("^(MAXIS|CTYPE|CDELT|CRPIX|CRVAL)$(ind)\$") :  # fits idi / bintables in general
         Regex("^([A-Z]+)$(ind)\$")  # uvfits, also hardcode whitelist?
     matching_cards = [match(re, k)[1] => v for (k, v) in pairs(fh) if occursin(re, k)]
