@@ -204,7 +204,7 @@ end
         spec = VLBI.VisSpec(VLBI.Baseline(1, (2, 9), (:FD, :PT)), UV([4.282665f6, -2.8318948f7])),
         value = (0.48758677f0 - 0.09014242f0im) ±ᵤ 0.040410895f0
     )
-    @test VLBI.antennas(tbl[12345]) == (VLBI.Antenna(:FD, 2, VLBI.SVector(NaN, NaN, NaN)), VLBI.Antenna(:PT, 9, VLBI.SVector(NaN, NaN, NaN)))
+    @test VLBI.antennas(tbl[12345]) == (VLBI.Antenna(:FD, 2, SVector(NaN, NaN, NaN)), VLBI.Antenna(:PT, 9, SVector(NaN, NaN, NaN)))
     @test VLBI.Baseline(tbl[12345]) == VLBI.Baseline(1, (2, 9), (:FD, :PT))
     @test UV(tbl[12345]) == UV(4.282665f6, -2.8318948f7)
     @test VLBI.visibility(tbl[12345]) == (0.48758677f0 - 0.09014242f0im) ±ᵤ 0.040410895f0
