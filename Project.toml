@@ -1,7 +1,7 @@
 name = "VLBIFiles"
 uuid = "c1ebf4c8-f9d4-409a-8daf-7009448f4e6e"
 authors = ["Alexander Plavin <alexander@plav.in>"]
-version = "0.3.33"
+version = "0.3.34"
 
 [deps]
 AccessorsExtra = "33016aad-b69d-45be-9359-82a41f556fd4"
@@ -46,7 +46,7 @@ PyFormattedStrings = "0.1.10"
 Reexport = "1.2.2"
 StaticArrays = "1.0"
 Statistics = "1"
-StructArrays = "0.6.4"
+StructArrays = "0.6.4, 0.7.1"
 Tables = "1.4"
 Uncertain = "0.1.0"
 Unitful = "1.5"
