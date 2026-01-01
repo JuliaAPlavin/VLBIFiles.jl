@@ -16,6 +16,12 @@ else
 	error("Unsupported kind: $kind")
 end
 
+function frequency(fw::FrequencyWindow, ::Type{Interval})
+	@assert fw.sideband == 1
+	@assert fw.nchan > 0
+	return fw.freq .. (fw.freq + fw.width)
+end
+
 Statistics.mean(xs::AbstractVector{<:FrequencyWindow}) = FrequencyWindow(
     first(xs).ix,
 	(@p xs map(_.freq) mean),
