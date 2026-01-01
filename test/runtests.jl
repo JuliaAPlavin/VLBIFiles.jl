@@ -411,6 +411,9 @@ end
 end
 
 @testitem "FITS IDI" begin
+    using VLBIFiles: FITSIO
+    using Dates
+
     p = "/Users/aplavin/Downloads/VLBA_UG002O_ug002o_BIN0_SRC0_0_180821T142741.idifits"
     uvf = VLBI.load(VLBI.UVData, p)
     @test VLBI.load(p) isa VLBI.UVData
@@ -419,6 +422,19 @@ end
     @test raw[12345] isa NamedTuple
     @test raw.SOURCE[1234] == 2
     @test raw.SOURCE isa VLBIFiles.TableHDUColumn
+    
+    fits = FITSIO.FITS(uvf)
+    hdu = fits["UV_DATA"]
+    @test VLBIFiles.axis_types(FITSIO.read_header(hdu)) == ["COMPLEX", "STOKES", "FREQ", "BAND", "RA", "DEC"]
+    @test VLBIFiles.axis_dict(FITSIO.read_header(hdu), "COMPLEX") == Dict(
+        "CDELT" => 1.0,
+        "MAXIS" => 2,
+        "CTYPE" => "COMPLEX",
+        "CRVAL" => 1.0,
+        "CRPIX" => 1.0)
+    @test VLBIFiles.axis_vals(FITSIO.read_header(hdu), "STOKES") == -1.0:-1.0:-1.0
+
+    @test uvf.header.date_obs == Date(2018, 8, 10)
 end
 
 @testitem "difmap model" begin

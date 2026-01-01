@@ -25,19 +25,22 @@ function axis_ind(fh::FITSHeader, ctype)
     return parse(Int, m[1])
 end
 
-function axis_dict(fh::FITSHeader, ctype)
+function axis_dict(fh::FITSHeader, ctype::AbstractString)
     ind = axis_ind(fh, ctype)
-    re = Regex("^([A-Z]+)$(ind)\$")
+    re = fh["XTENSION"] == "BINTABLE" ?
+        Regex("^(MAXIS|CTYPE|CDELT|CRPIX|CRVAL)$(ind)\$") :  # fits idi / bintables in general
+        Regex("^([A-Z]+)$(ind)\$")  # uvfits, also hardcode whitelist?
     matching_cards = [match(re, k)[1] => v for (k, v) in pairs(fh) if occursin(re, k)]
     return Dict(matching_cards)
 end
 
 function axis_vals(fh::FITSHeader, ctype; zero_reference=false)
     dict = axis_dict(fh, ctype)
+    n = @oget dict["NAXIS"] dict["MAXIS"]
     if zero_reference
-        return ((1:dict["NAXIS"]) .- dict["CRPIX"]) .* dict["CDELT"]
+        return ((1:n) .- dict["CRPIX"]) .* dict["CDELT"]
     else
-        return dict["CRVAL"] .+ ((1:dict["NAXIS"]) .- dict["CRPIX"]) .* dict["CDELT"]
+        return dict["CRVAL"] .+ ((1:n) .- dict["CRPIX"]) .* dict["CDELT"]
     end
 end
     
