@@ -1,4 +1,5 @@
 Base.@kwdef struct FrequencyWindow
+    ix::Int
     freq::typeof(1f0u"Hz")
     width::typeof(1f0u"Hz")
     nchan::Int16
@@ -15,7 +16,8 @@ else
 	error("Unsupported kind: $kind")
 end
 
-Statistics.mean(xs::AbstractVector{<:VLBI.FrequencyWindow}) = VLBI.FrequencyWindow(
+Statistics.mean(xs::AbstractVector{<:FrequencyWindow}) = FrequencyWindow(
+    first(xs).ix,
 	(@p xs map(_.freq) mean),
 	(@p xs map(_.width) sum),
 	(@p xs map(_.nchan) sum),
@@ -51,13 +53,8 @@ function UVHeader(fh::FITSHeader)
     )
 end
 
-Base.@kwdef struct Antenna
-    name::Symbol
-    id::Int
-    xyz::SVector{3, Float64}
-end
 
-function Antenna(hdu_row::NamedTuple)
+function VLBIData.Antenna(hdu_row::NamedTuple)
     if !isempty(hdu_row.ORBPARM) && hdu_row.ORBPARM != 0
         @warn "Antennas with ORBPARM detected, be careful" hdu_row.ORBPARM hdu_row.ANNAME
     end
@@ -85,6 +82,21 @@ end
 Base.length(a::AntArray) = length(a.antennas)
 Base.getindex(a::AntArray, i::Int) = a.antennas[i]
 
+function VLBIData.Baseline(array_ix::Integer, ant_ids::NTuple{2, Integer}, ant_arrays::Vector{AntArray})
+    ants = ant_arrays[array_ix].antennas
+    names = map(ant_ids) do id
+        ix = findfirst(ant -> ant.id == id, ants)
+        if !isnothing(ix)
+            ants[ix].name
+        else
+            @warn "Antenna index out of bounds, assigning generated name" length(ants) ant_ids
+            Symbol(:ANT, id)
+        end
+    end
+    Baseline(array_ix, ant_ids, names)
+end
+
+
 Base.@kwdef struct UVData
     path::String
     header::Union{UVHeader,Nothing}
@@ -100,12 +112,13 @@ function read_freqs(uvh, fq_table)
         isa(x, AbstractArray) ? x : fill(x, nrows)
     end
     ref_freq = @oget frequency(uvh) read_header(fq_table)["REF_FREQ"]*u"Hz"
-    res = map(fq_row |> rowtable) do r
+    res = map(fq_row |> rowtable |> enumerate) do (ix, r)
         total_bw = @oget r[S"TOTAL BANDWIDTH"] r[S"TOTAL_BANDWIDTH"]
         ch_width = @oget r[S"CH WIDTH"] r[S"CH_WIDTH"]
         curfreq = @oget r[S"IF FREQ"] r[S"BANDFREQ"]
         nchan = Int(total_bw / ch_width)
         FrequencyWindow(;
+            ix,
             freq=ref_freq + curfreq * u"Hz",
             width=total_bw * u"Hz",
             nchan,
@@ -123,68 +136,6 @@ function read_data_raw(uvdata::UVData, ::typeof(identity)=identity)
     hdu = GroupedHDU(fits.fitsfile, 1)
     read(hdu)
 end
-
-struct Baseline
-    array_ix::Int8
-    ant_ids::NTuple{2, Int8}
-    ant_names::NTuple{2, Symbol}
-end
-
-function Base.getproperty(b::Baseline, key::Symbol)
-    key == :ants_ix && (Base.depwarn("Baseline.ants_ix is deprecated, use ant_ids instead", :ants_ix); return b.ant_ids)
-    return getfield(b, key)
-end
-
-@deprecate Baseline(array_ix::Integer, ant_ids::NTuple{2, Integer}) Baseline(array_ix, ant_ids, (Symbol(:ANT, ant_ids[1]), Symbol(:ANT, ant_ids[2])))
-
-function Baseline(array_ix::Integer, ant_ids::NTuple{2, Integer}, ant_arrays::Vector{AntArray})
-    ants = ant_arrays[array_ix].antennas
-    names = map(ant_ids) do id
-        ix = findfirst(ant -> ant.id == id, ants)
-        if !isnothing(ix)
-            ants[ix].name
-        else
-            @warn "Antenna index out of bounds, assigning generated name" length(ants) ant_ids
-            Symbol(:ANT, id)
-        end
-    end
-    Baseline(array_ix, ant_ids, names)
-end
-
-antennas(b::Baseline) =
-    map(b.ant_ids, b.ant_names) do id, name
-        Antenna(name, id, SVector(NaN, NaN, NaN))
-    end
-Accessors.set(b::Baseline, ::typeof(antennas), ants) = setproperties(b, ant_ids=map(a -> a.id, ants), ant_names=map(a -> a.name, ants))
-@accessor antennas(x) = antennas(VLBI.Baseline(x))
-
-antennas(x::Antenna) = (x,)
-antennas(x::NTuple{<:Any,Antenna}) = x
-antennas(x::AbstractVector{Antenna}) = x
-
-abstract type AbstractSpec end
-
-struct VisSpec{TUV<:UV} <: AbstractSpec
-	bl::VLBI.Baseline
-	uv::TUV
-end
-VisSpec(bl::VLBI.Baseline, uv::AbstractVector) = VisSpec(bl, UV(uv))
-
-@accessor VLBI.Baseline(bl::Baseline) = identity(bl)
-@accessor VLBI.Baseline(vs::VisSpec) = vs.bl
-VLBI.Baseline(x::NamedTuple) = VLBI.Baseline(@oget x.baseline x.spec)
-
-@accessor UV(x::VisSpec) = x.uv
-@accessor UV(x::NamedTuple) = UV(x.spec)
-
-AccessorsExtra.hasoptic(::Baseline, ::Type{UV}) = false
-AccessorsExtra.hasoptic(::Union{Antenna,NTuple{<:Any,Antenna},AbstractVector{Antenna}}, ::Type{UV}) = false
-AccessorsExtra.hasoptic(::UV, ::Type{Baseline}) = false
-AccessorsExtra.hasoptic(obj, ::typeof(antennas)) = AccessorsExtra.hasoptic(obj, Baseline)
-
-InterferometricModels.visibility(x::NamedTuple) = x.value
-
-frequency(x::NamedTuple) = frequency(x.if_spec)
 
 
 function read_data_arrays(uvdata::UVData, impl=identity)
@@ -241,15 +192,14 @@ function _table(uvdata::UVData, impl=identity)
         # `|> columntable |> rowtable` is faster than `|> rowtable` alone
         map(__ |> columntable |> rowtable) do r
             ix = r._
-            if_spec = uvdata.freq_windows[r.IF]
+            freq_spec = uvdata.freq_windows[r.IF]
             uvw_m = data.uvw_m[ix]
-            uvw_wl = UVW(ustrip.(Unitful.NoUnits, uvw_m ./ (u"c" / frequency(if_spec, :average))))
+            uvw_wl = UVW(ustrip.(Unitful.NoUnits, uvw_m ./ (u"c" / frequency(freq_spec, :average))))
             (;
                 baseline=data.baseline[ix],
                 datetime=data.datetime[ix],
                 stokes=r.STOKES,
-                if_ix=Int8(r.IF),
-                if_spec=if_spec,
+                freq_spec,
                 uv_m=UV(uvw_m), w_m=uvw_m.w,
                 uv=UV(uvw_wl), w=uvw_wl.w,
                 visibility=r.value,
@@ -262,8 +212,8 @@ function _table(uvdata::UVData, impl=identity)
 end
 
 
-uvtable(uvd::VLBI.UVData; stokes=(:I, :LL, :RR)) = @p uvd _table filter(_.stokes ∈ stokes) map((;
-	_.datetime, _.stokes, _.if_ix, _.if_spec,
+uvtable(uvd::UVData; stokes=(:I, :LL, :RR)) = @p uvd _table filter(_.stokes ∈ stokes) map((;
+	_.datetime, _.stokes, _.freq_spec,
 	spec=VisSpec(_.baseline, UV(_.uv)),
 	value=U.Value(_.visibility, 1/√_.weight),
 ))
