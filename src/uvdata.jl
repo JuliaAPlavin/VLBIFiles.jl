@@ -64,7 +64,7 @@ function VLBIData.Antenna(hdu_row::NamedTuple)
     if !isempty(hdu_row.ORBPARM) && hdu_row.ORBPARM != 0
         @warn "Antennas with ORBPARM detected, be careful" hdu_row.ORBPARM hdu_row.ANNAME
     end
-    Antenna(; name=Symbol(hdu_row.ANNAME), xyz=hdu_row.STABXYZ)
+    Antenna(; name=Symbol(hdu_row.ANNAME), xyz=hdu_row.STABXYZ, mount_type=VLBIData.AntennaMountType.T(hdu_row.MNTSTA), poltypes=Symbol.((hdu_row.POLTYA, hdu_row.POLTYB)))
 end
 Base.@kwdef struct AntArray
     name::String
