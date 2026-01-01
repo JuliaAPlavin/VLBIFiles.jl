@@ -44,7 +44,8 @@ Core.eval(VLBI, Expr(:export, _names...))
     load, save, guess_type,
     table, read_data_raw, read_data_arrays,
     FitsImage, FrequencyWindow, UVHeader, AntArray, UVData,
-    pixel_size, pixel_steps, pixel_area
+    pixel_size, pixel_steps, pixel_area,
+    image_stored, image_clean, image_residual, image_clean_with_residual
 using ..InterferometricModels
 end
 
