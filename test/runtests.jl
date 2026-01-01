@@ -198,12 +198,12 @@ end
     @test antarr.name == "VLBA"
     @test map(a -> a.name, antarr.antennas) |> collect == [:BR, :FD, :HN, :KP, :LA, :MK, :NL, :OV, :PT, :SC]
 
-
     @test frequency(uv.freq_windows[1]) == 1.5329522f10u"Hz"
     @test frequency(uv.freq_windows[1], VLBIFiles.Interval) == VLBIFiles.Interval(1.5329522f10u"Hz", 1.5337521f10u"Hz")
 
     tbl_raw = uvtable(uv)
     @test length(tbl_raw) == 160560
+    @test issetequal(sort(tbl_raw; by=r -> r.freq_spec), tbl_raw)
     tbl = filter(r -> r.stokes ∈ (:RR, :LL), tbl_raw)
     @test length(tbl) == 80280
     @test isconcretetype(eltype(tbl))
