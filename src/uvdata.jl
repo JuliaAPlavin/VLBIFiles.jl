@@ -66,7 +66,8 @@ function VLBIData.Antenna(hdu_row::NamedTuple)
     if !isempty(hdu_row.ORBPARM) && hdu_row.ORBPARM != 0
         @warn "Antennas with ORBPARM detected, be careful" hdu_row.ORBPARM hdu_row.ANNAME
     end
-    Antenna(; name=Symbol(hdu_row.ANNAME), xyz=hdu_row.STABXYZ, mount_type=VLBIData.AntennaMountType.T(hdu_row.MNTSTA), poltypes=Symbol.((hdu_row.POLTYA, hdu_row.POLTYB)))
+	poltypes = haskey(hdu_row, :POLTYA) ? Symbol.((hdu_row.POLTYA, hdu_row.POLTYB)) : (:UNK, :UNK)
+    Antenna(; name=Symbol(hdu_row.ANNAME), xyz=hdu_row.STABXYZ, mount_type=VLBIData.AntennaMountType.T(hdu_row.MNTSTA), poltypes)
 end
 Base.@kwdef struct AntArray
     name::String
@@ -91,6 +92,19 @@ Base.length(a::AntArray) = length(a.antennas)
 Base.getindex(a::AntArray, i::Int) = a.antennas[i]
 Base.setindex(a::AntArray, ant::Antenna, i::Int) = @set a.antennas[i] = ant
 ant_by_name(a::AntArray, name::Symbol) = filteronly(ant -> ant.name == name, a.antennas)
+
+
+function Baseline_from_fits(b::Real)
+    bi = floor(Int, b)
+	a1, a2 = bi ÷ 256, bi % 256
+	return Baseline((a1, a2))
+end
+function Baseline_from_fits(b::Real, antarrays)
+    bi = floor(Int, b)
+    arri = floor(Int, (b % 1) * 100) + 1
+	a1, a2 = bi ÷ 256, bi % 256
+	return Baseline(1, (a1, a2), antarrays)
+end
 
 function VLBIData.Baseline(array_ix::Integer, ant_ids::NTuple{2, Integer}, ant_arrays::Vector{AntArray})
     ants = ant_arrays[array_ix].antennas
@@ -141,7 +155,7 @@ end
 function read_data_raw(uvdata::UVData, ::typeof(identity)=identity)
     fits = FITS(uvdata.path)
     if haskey(fits, "UV_DATA")
-        return (fits["UV_DATA"] |> columntable)
+        return fits["UV_DATA"] |> lazycolumntable |> StructArray
     end
     hdu = GroupedHDU(fits.fitsfile, 1)
     read(hdu)
@@ -171,10 +185,7 @@ function read_data_arrays(uvdata::UVData, impl=identity)
     axarr = axarr[DEC=1, RA=1]
 
     uvw_m = UVW.([Float32.(raw[k]) .* (u"c" * u"s") .|> u"m" for k in uvw_keys]...)
-    baseline = map(raw[:BASELINE]) do b
-        bi = floor(Int, b)
-        Baseline(round(Int, (b % 1) * 100) + 1, (bi ÷ 256, bi % 256), uvdata.ant_arrays)
-    end
+    baseline = map(b -> Baseline_from_fits(b, uvdata.ant_arrays), raw[:BASELINE])
     data = (;
         uvw_m,
         baseline,

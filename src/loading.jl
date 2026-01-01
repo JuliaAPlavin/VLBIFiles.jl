@@ -4,6 +4,7 @@ function guess_type(src)
     if isvalid(line) && startswith(line, r"! \w+")
         MultiComponentModel
     else
+        hdunames = map(name, FITS(src))
         ctypes = try
             FITS(src) do f
                 read_header(f[1]) |> axis_types
@@ -14,7 +15,9 @@ function guess_type(src)
         if "RA---SIN" ∈ ctypes
             return FitsImage
         elseif "COMPLEX" ∈ ctypes
-            return UVData
+            return UVData  # UVFITS
+        elseif "UV_DATA" ∈ hdunames
+            return UVData  # FITSIDI
         else
             error("Cannot guess data type using FITS header of $src")
         end
