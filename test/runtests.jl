@@ -41,6 +41,7 @@ end
     using StaticArrays
     using Statistics
     using AxisKeys
+    using SkyCoords
     cd(dirname(@__FILE__))
 
     img = VLBI.load("./data/map.fits", read_data=true)
@@ -55,6 +56,8 @@ end
     @test axiskeys(KA, :dec) .|> ustrip ≈ -51.2:0.2:51   atol=1e-3
     @test axiskeys(KA, :ra) isa AbstractRange
     @test axiskeys(KA, :dec) isa AbstractRange
+    
+    @test ICRSCoords(img) ≈ ICRSCoords(0.0775|>deg2rad, 2.80333333333|>deg2rad)
 end
 
 @testitem "img save" begin
@@ -288,6 +291,7 @@ end
     using Statistics
     using StaticArrays
     using Tables
+    using SkyCoords
     cd(dirname(@__FILE__))
 
     uv = VLBI.load(VLBI.UVData, "./data/hops_3600_OJ287_LO+HI.medcal_dcal_full.uvfits")
@@ -304,6 +308,8 @@ end
     @test res == target
     @test map(typeof, res) == map(typeof, target)
     @test df == uvtable(uv; impl=pyimport)
+
+    @test ICRSCoords(uv) ≈ ICRSCoords(133.703645547231|>deg2rad, 20.10851132763757|>deg2rad)
 end
 
 @testitem "uvf EHT 2" begin
@@ -314,6 +320,7 @@ end
     using Statistics
     using StaticArrays
     using Tables
+    using SkyCoords
     cd(dirname(@__FILE__))
 
     uv = VLBI.load(VLBI.UVData, "./data/SR1_3C279_2017_101_hi_hops_netcal_StokesI.uvfits")
@@ -330,6 +337,8 @@ end
     @test res == target
     @test map(typeof, res) == map(typeof, target)
     @test df == uvtable(uv; impl=pyimport)
+    
+    @test ICRSCoords(uv) ≈ ICRSCoords(194.0465273618698|>deg2rad, -5.789312447441949|>deg2rad)
 end
 
 @testitem "uvf EHT 3" begin
@@ -339,6 +348,7 @@ end
     using Statistics
     using StaticArrays
     using Tables
+    using SkyCoords
     cd(dirname(@__FILE__))
 
     uv = VLBI.load(VLBI.UVData, "./data/datafile_01-01_230GHz.uvfits")
@@ -346,6 +356,8 @@ end
     df = uvtable(uv)
     @test VLBI.visibility(df[1]) ≈ -0.0061733737f0 + 0.052109245f0im
     @test df == uvtable(uv; impl=pyimport)
+
+    @test ICRSCoords(uv) ≈ ICRSCoords(187.70595|>deg2rad, 12.39112|>deg2rad)
 end
 
 @testitem "difmap model" begin
