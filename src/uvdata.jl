@@ -87,6 +87,8 @@ end
 
 Base.length(a::AntArray) = length(a.antennas)
 Base.getindex(a::AntArray, i::Int) = a.antennas[i]
+Base.setindex(a::AntArray, ant::Antenna, i::Int) = @set a.antennas[i] = ant
+ant_by_name(a::AntArray, name::Symbol) = filteronly(ant -> ant.name == name, a.antennas)
 
 function VLBIData.Baseline(array_ix::Integer, ant_ids::NTuple{2, Integer}, ant_arrays::Vector{AntArray})
     ants = ant_arrays[array_ix].antennas
@@ -187,6 +189,10 @@ end
 function _table(uvdata::UVData; impl)
     data = read_data_arrays(uvdata, impl)
     @assert ndims(data.visibility) == 4
+
+    poltypes = @p uvdata.ant_arrays flatmap(_.antennas) map(_.poltypes) unique
+    # XXX: will also trigger if poltypes of all antennas changed to a different (but same) value:
+    stokes_asis = length(poltypes) == 1
     
     @p begin
         data.visibility
@@ -199,7 +205,7 @@ function _table(uvdata::UVData; impl)
             (;
                 baseline=data.baseline[ix],
                 datetime=data.datetime[ix],
-                stokes=r.STOKES,
+                stokes=stokes_asis ? r.STOKES : to_proper_stokes(r.STOKES, uvdata.ant_arrays, data.baseline[ix]),
                 freq_spec,
                 uv_m=UV(uvw_m), w_m=uvw_m.w,
                 uv=UV(uvw_wl), w=uvw_wl.w,
@@ -210,6 +216,20 @@ function _table(uvdata::UVData; impl)
         @insert __.weight = collect(vec(data.weight))
         filter!(_.weight > 0)
     end
+end
+
+function to_proper_stokes(stokes::Symbol, ant_arrays, bl::Baseline{Symbol})
+    length(ant_arrays) == 1 || error("Modify poltypes in multi-array UVData is not supported")
+    ant_array = only(ant_arrays)
+    ants = ant_by_name.(Ref(ant_array), bl.antennas)
+    poltypes_is =
+        stokes == :RR ? (1, 1) :
+        stokes == :LL ? (2, 2) :
+        stokes == :RL ? (1, 2) :
+        stokes == :LR ? (2, 1) :
+        error("Unsupported stokes: $stokes")
+    poltypes = map((a, i) -> a.poltypes[i], ants, poltypes_is)
+    return Symbol(poltypes...)
 end
 
 
