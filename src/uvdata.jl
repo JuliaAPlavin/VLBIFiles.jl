@@ -160,7 +160,7 @@ function read_freqs(uvh, fq_table)
 	        curfreq = @oget r[S"IF FREQ"] r[S"BANDFREQ"]
 	        nchan = Int(total_bw / ch_width)
 	        FrequencyWindow(;
-                freqid=(@oget r.FREQID 1),
+                freqid=(@oget fq_row.FREQID 1),
 	            ix,
 	            freq=ref_freq + curfreq * u"Hz",
 	            width=total_bw * u"Hz",
