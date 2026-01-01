@@ -21,6 +21,7 @@ using Uncertain
 using InterferometricModels: components
 @reexport using VLBIData
 import VLBIData: frequency, uvtable
+using VLBIData: filter  # for Julia below 1.11
 using Dictionaries
 
 export VLBI, table, uvtable
