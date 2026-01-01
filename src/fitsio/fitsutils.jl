@@ -25,6 +25,8 @@ function axis_ind(fh::FITSHeader, ctype)
     return parse(Int, m[1])
 end
 
+axes_dicts_all(fh::FITSHeader) = @p axis_types(fh) map(axis_dict(fh, _))
+
 function axis_dict(fh::FITSHeader, ctype::AbstractString)
     ind = axis_ind(fh, ctype)
     re = fh["XTENSION"] == "BINTABLE" ?
@@ -34,8 +36,9 @@ function axis_dict(fh::FITSHeader, ctype::AbstractString)
     return Dict(matching_cards)
 end
 
-function axis_vals(fh::FITSHeader, ctype; zero_reference=false)
-    dict = axis_dict(fh, ctype)
+axis_val(args...; zero_reference=false) = axis_vals(args...; zero_reference) |> only
+axis_vals(fh::FITSHeader, ctype; zero_reference=false) = axis_vals(axis_dict(fh, ctype); zero_reference)
+function axis_vals(dict::Dict; zero_reference=false)
     n = @oget dict["NAXIS"] dict["MAXIS"]
     if zero_reference
         return ((1:n) .- dict["CRPIX"]) .* dict["CDELT"]
@@ -43,9 +46,25 @@ function axis_vals(fh::FITSHeader, ctype; zero_reference=false)
         return dict["CRVAL"] .+ ((1:n) .- dict["CRPIX"]) .* dict["CDELT"]
     end
 end
-    
-function axis_val(fh::FITSHeader, ctype; zero_reference=false)
-    vals = axis_vals(fh, ctype, zero_reference=zero_reference)
-    @assert length(vals) == 1
-    return first(vals)
+
+
+function named_axiskeys_tablecol(fh::FITSHeader)
+    ax_dicts = axes_dicts_all(fh)
+    @p ax_dicts map() do r
+        name = Symbol(r["CTYPE"])
+        name => axis_vals(r)
+    end NamedTuple
+end
+
+const val_to_stokes = Dict(-4 => :LR, -3 => :RL, -2 => :LL, -1 => :RR, 1 => :I, 2 => :Q, 3 => :U, 4 => :V)
+
+function named_axiskeys_tablecol_fitsidi(fh::FITSHeader)
+    base = named_axiskeys_tablecol(fh)
+    valmaps = (COMPLEX=(@o [:re, :im, :wt][Int(_)]), STOKES=(@o val_to_stokes[_]))
+    updvals = map(keys(base), values(base)) do k, origval
+        valmap = @oget valmaps[k]
+        isnothing(valmap) && return origval
+        return valmap.(origval)
+    end
+    NamedTuple{keys(base)}(updvals)
 end

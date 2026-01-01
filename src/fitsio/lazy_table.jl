@@ -1,10 +1,27 @@
 function lazycolumntable(hdu::TableHDU)
-	colnames = columnnames(hdu) |> Tuple
-	cols = map(colnames) do colname
-		TableHDUColumn(hdu, colname)
-	end
-	NamedTuple{colnames}(cols)
+    colnames = columnnames(hdu) |> Tuple
+    cols = map(colnames) do colname
+        TableHDUColumn(hdu, colname)
+    end
+    tbl = NamedTuple{colnames}(cols)
+
+    fhead = FITSIO.read_header(hdu)
+    @reset tbl.FLUX = mapview(colarray_postfunc(fhead, Val(:FLUX)), tbl.FLUX)
+    @reset tbl.WEIGHT = mapview(colarray_postfunc(fhead, Val(:WEIGHT)), tbl.WEIGHT)
+
+    return tbl
 end
+
+function colarray_postfunc(fhead::FITSHeader, ::Val{:FLUX})
+    col_naxkeys = named_axiskeys_tablecol_fitsidi(fhead)
+    x -> KeyedArray(reshape(x, Tuple(map(length, col_naxkeys))); col_naxkeys...)
+end
+
+function colarray_postfunc(fhead::FITSHeader, ::Val{:WEIGHT})
+    col_naxkeys = named_axiskeys_tablecol_fitsidi(fhead)[(:STOKES, :BAND)]
+    x -> KeyedArray(reshape(x, Tuple(map(length, col_naxkeys))); col_naxkeys...)
+end
+
 
 
 struct TableHDUColumn{T, P} <: AbstractVector{T}
