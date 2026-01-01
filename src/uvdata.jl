@@ -213,7 +213,7 @@ function _table(uvdata::UVData; impl)
 end
 
 
-uvtable(uvd::UVData; stokes=(:I, :LL, :RR), impl=identity) = @p uvd _table(;impl) filter(_.stokes ∈ stokes) map((;
+uvtable(uvd::UVData; impl=identity) = @p uvd _table(;impl) map((;
 	_.datetime, _.stokes, _.freq_spec,
 	spec=VisSpec(_.baseline, UV(_.uv)),
 	value=U.Value(_.visibility, 1/√_.weight),
