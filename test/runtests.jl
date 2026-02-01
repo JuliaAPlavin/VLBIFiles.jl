@@ -308,6 +308,34 @@ end
 end
 
 
+@testitem "uvf average by frequency" begin
+    using Unitful, UnitfulAstro, UnitfulAngles
+    using VLBIFiles.Uncertain
+    using Statistics
+    using DataManipulation
+    cd(dirname(@__FILE__))
+
+    uv = VLBI.load(VLBI.UVData, "./data/vis.fits")
+    tbl = filter(r -> r.stokes ∈ (:RR, :LL), uvtable(uv))
+
+    avg = VLBI.average_data(VLBI.ByFrequency(), tbl)
+    @test length(avg) < length(tbl)
+    @test isconcretetype(eltype(avg))
+
+    # all rows get the same merged freq_spec
+    @test allequal(avg.freq_spec)
+    fs = avg.freq_spec[1]
+    @test fs isa VLBI.FrequencyWindow
+    @test fs.freq ≈ mean(fw -> fw.freq, uv.freq_windows)
+    @test fs.width ≈ sum(fw -> fw.width, uv.freq_windows)
+
+    # most baselines×times have all 8 freq windows
+    @test maximum(avg.count) == 8
+
+    # stokes preserved
+    @test Set(avg.stokes) == Set([:RR, :LL])
+end
+
 @testitem "uvf multichannel" begin
     using Unitful, UnitfulAstro, UnitfulAngles
     using Dates
