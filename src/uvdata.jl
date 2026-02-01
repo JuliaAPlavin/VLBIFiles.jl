@@ -23,6 +23,8 @@ function frequency(fw::FrequencyWindow, ::Type{Interval})
     return fw.freq .. (fw.freq + fw.width)
 end
 
+frequency(freq::AbstractVector{<:VLBIFiles.FrequencyWindow}, ::Type{Interval}) = @p freq flatmap(endpoints(frequency(_, Interval))) extrema Interval(__...)
+
 function frequencies(fw::FrequencyWindow)
     @assert fw.sideband == 1
     @assert fw.nchan > 0
