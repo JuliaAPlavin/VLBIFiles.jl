@@ -10,6 +10,7 @@ using TestItemRunner
     @test VLBI.guess_type("./data/vis_multichan.vis") == VLBI.UVData
     @test VLBI.guess_type("./data/difmap_model.mod") == MultiComponentModel
     @test VLBI.guess_type("./data/difmap_model_empty.mod") == MultiComponentModel
+    @test VLBI.guess_type("./data/alist_v6.fsumm") == VLBI.Alist
 end
 
 @testitem "img don't read data" begin
@@ -591,6 +592,43 @@ end
 #         end
 #     end
 # end
+
+@testitem "alist" begin
+    using Dates
+    using Unitful, UnitfulAstro, UnitfulAngles
+    using VLBIFiles.Uncertain
+    using StaticArrays
+    using DataManipulation
+    cd(dirname(@__FILE__))
+
+    df = VLBI.load("./data/alist_v6.fsumm")
+    @test df == VLBI.load(VLBI.Alist, "./data/alist_v6.fsumm")
+    @test length(df) == 318
+    @test isconcretetype(eltype(df))
+
+    # correct sources and baselines parsed
+    @test sort(unique(getfield.(df, :source))) == ["3C273", "3C279", "J1337-1257", "J1512-0905", "J1751+0939"]
+    @test sort(unique(getfield.(df, :stokes))) == [:LL, :RR, :XL, :XX, :YR, :YY]
+
+    # first row: auto-correlation
+    r1 = df[1]
+    @test r1.source == "J1512-0905"
+    @test r1.datetime == DateTime(2016, 4, 8, 9, 8, 0)
+    @test VLBI.antenna_names(r1) == (:L, :L)
+    @test UV(r1) == UV(0.0, 0.0)
+    @test r1.snr ≈ 377927.47
+
+    # cross-correlation entry
+    r33 = df[33]
+    @test r33.source == "3C279"
+    @test VLBI.antenna_names(r33) == (:A, :S)
+    @test r33.stokes == :XL
+    @test r33.snr ≈ 96.028893
+    @test abs(VLBI.visibility(r33)) ≈ 2.5406718e-4  rtol=1e-4
+
+    # freq_spec synthesized from ref_freq
+    @test r1.freq_spec ≈ 228.166197u"GHz"  rtol=1e-4
+end
 
 @testitem "_" begin
     import Aqua
