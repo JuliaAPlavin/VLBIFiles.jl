@@ -445,10 +445,9 @@ end
     using AxisKeys
     using VLBIFiles: FITSIO
     using Dates
-    using Downloads
 
     p = joinpath(@__DIR__, "data", "BL146_1.fits")
-    isfile(p) || Downloads.download("https://fits.gsfc.nasa.gov/registry/fitsidi/BL146_1.fits", p)
+    isfile(p) || download("https://fits.gsfc.nasa.gov/registry/fitsidi/BL146_1.fits", p)
 
     uvf = VLBI.load(VLBI.UVData, p)
     @test VLBI.load(p) isa VLBI.UVData
