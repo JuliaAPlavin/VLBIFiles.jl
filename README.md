@@ -27,9 +27,10 @@ Astronomical images as `KeyedArray`s from [AxisKeys.jl](https://github.com/mcabb
 - **FITS files**: ✅ Read, ✅ Write
 
 ### Visibilities
-Complex interferometric visibility data:
-- **UVFITS files**: ✅ Read, ❌ Write
-- **FITS-IDI files**: 🟡 Read (partial), ❌ Write
+Complex interferometric visibility data, read-only:
+- **UVFITS files**: ✅ Read
+- **FITS-IDI files**: 🟡 Read (partial)
+- **HOPS alist files**: ✅ Read
 
 ### Source Models
 Parametric source models via [InterferometricModels.jl](https://github.com/JuliaAPlavin/InterferometricModels.jl):
