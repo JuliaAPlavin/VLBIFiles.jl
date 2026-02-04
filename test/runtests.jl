@@ -440,14 +440,50 @@ end
     @test ICRSCoords(uv) ≈ ICRSCoords(187.70595|>deg2rad, 12.39112|>deg2rad)
 end
 
-@testitem "FITS IDI" begin
+@testitem "FITS IDI small" begin
+    using AxisKeys
+    using VLBIFiles: FITSIO
+    using Dates
+    using Downloads
+
+    p = joinpath(@__DIR__, "data", "BL146_1.fits")
+    isfile(p) || Downloads.download("https://fits.gsfc.nasa.gov/registry/fitsidi/BL146_1.fits", p)
+
+    uvf = VLBI.load(VLBI.UVData, p)
+    @test VLBI.load(p) isa VLBI.UVData
+
+    @test length(uvf.freq_windows) == 4
+
+    raw = VLBI.read_data_raw(uvf)
+    @test length(raw) == 1000
+    @test raw[1] isa NamedTuple
+    @test raw.SOURCE[1] == 1
+    @test raw.SOURCE isa VLBIFiles.TableHDUColumn
+    @test named_axiskeys(raw.FLUX[1]) == (COMPLEX = [:re, :im], STOKES = [:RR, :LL, :RL, :LR], FREQ = 8.40595875e9:1.0e6:8.41295875e9, BAND = 1.0:1.0:4.0, RA = StepRangeLen(0.0, 0.0, 1), DEC = StepRangeLen(0.0, 0.0, 1))
+    @test named_axiskeys(raw.WEIGHT[1]) == (STOKES = [:RR, :LL, :RL, :LR], BAND = 1.0:1.0:4.0)
+
+    fits = FITSIO.FITS(uvf)
+    hdu = fits["UV_DATA"]
+    @test VLBIFiles.axis_types(FITSIO.read_header(hdu)) == ["COMPLEX", "STOKES", "FREQ", "BAND", "RA", "DEC"]
+    @test VLBIFiles.axis_dict(FITSIO.read_header(hdu), "COMPLEX") == Dict(
+        "CDELT" => 1.0,
+        "MAXIS" => 2,
+        "CTYPE" => "COMPLEX",
+        "CRVAL" => 1.0,
+        "CRPIX" => 1.0)
+    @test VLBIFiles.axis_vals(FITSIO.read_header(hdu), "STOKES") == -1.0:-1.0:-4.0
+
+    @test uvf.header.date_obs == Date(2007, 8, 23)
+end
+
+@testitem "FITS IDI large" begin
     using AxisKeys
     using VLBIFiles: FITSIO
     using Dates
 
     p = "/Users/aplavin/work/galactic_scatter/2005+403/data/archival/vlba/UG002/VLBA_UG002O_ug002o_BIN0_SRC0_0_180821T142741.idifits"
     if !isfile(p)
-        @warn "FITS IDI test file not found, skipping" p
+        @warn "FITS IDI large test file not found, skipping" p
     else
         uvf = VLBI.load(VLBI.UVData, p)
         @test VLBI.load(p) isa VLBI.UVData
