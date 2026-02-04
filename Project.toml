@@ -1,7 +1,7 @@
 name = "VLBIFiles"
 uuid = "c1ebf4c8-f9d4-409a-8daf-7009448f4e6e"
 authors = ["Alexander Plavin <alexander@plav.in>"]
-version = "0.4.8"
+version = "0.4.9"
 
 [deps]
 AccessorsExtra = "33016aad-b69d-45be-9359-82a41f556fd4"
@@ -65,5 +65,5 @@ Uncertain = "0.1.0"
 Unitful = "1.5"
 UnitfulAngles = "0.6.2, 0.7"
 UnitfulAstro = "1.0"
-VLBIData = "0.5"
+VLBIData = "0.5.10"
 julia = "1.10"

@@ -40,6 +40,12 @@ Statistics.mean(xs::AbstractVector{<:FrequencyWindow}) = FrequencyWindow(
     (@p xs map(_.sideband) uniqueonly),
 )
 
+function VLBIData._aggfreq(freq_specs::AbstractVector{<:FrequencyWindow})
+    mean_freq = mean(fs -> fs.freq, freq_specs)
+    total_width = sum(fs -> fs.width, freq_specs)
+    return VLBIFiles.FrequencyWindow(0, 0, mean_freq, total_width, 1, 1)
+end
+
 Base.@kwdef struct UVHeader
     fits::FITSHeader
     object::Union{String,Nothing}
