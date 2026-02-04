@@ -3,6 +3,8 @@ function guess_type(src)
     line = first(eachline(src))
     if isvalid(line) && startswith(line, r"! \w+")
         MultiComponentModel
+    elseif isvalid(line) && startswith(line, "* This file processed by ")
+        Alist
     else
         hdunames = map(name, FITS(src))
         ctypes = try

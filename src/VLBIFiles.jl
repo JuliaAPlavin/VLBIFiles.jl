@@ -23,6 +23,7 @@ using InterferometricModels: components
 import VLBIData: frequency, uvtable
 using VLBIData: filter  # for Julia below 1.11
 using Dictionaries
+using CSV
 
 export VLBI, table, uvtable
 
@@ -33,6 +34,7 @@ include("fitsio/lazy_table.jl")
 include("uvdata.jl")
 include("fitsimage.jl")
 include("difmap_files.jl")
+include("alist.jl")
 include("loading.jl")
 
 baremodule VLBI
@@ -47,7 +49,7 @@ Core.eval(VLBI, Expr(:export, _names...))
     VLBIFiles,
     load, save, guess_type,
     table, read_data_raw, read_data_arrays,
-    FitsImage, FrequencyWindow, UVHeader, AntArray, UVData,
+    FitsImage, FrequencyWindow, UVHeader, AntArray, UVData, Alist,
     pixel_size, pixel_steps, pixel_area,
     image_stored, image_clean, image_residual, image_clean_with_residual
 using ..InterferometricModels
