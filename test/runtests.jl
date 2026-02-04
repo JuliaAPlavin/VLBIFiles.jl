@@ -184,13 +184,18 @@ end
     using AxisKeys
     cd(dirname(@__FILE__))
 
-    img = VLBI.load("./data/M87_EHT_2018_3644_b3.fits")
-    KA = KeyedArray(img)
-    @test size(KA) == (128, 128)
-    @test maximum(KA) ≈ 7.676266878722255
-    @test KA[23, 22] ≈ 0.01466615223632145
-    @test axiskeys(KA, :ra)  .|> ustrip ≈ 0.07441406249999923:-0.001171874999999988:-0.07441406249999925
-    @test_throws "key \"BMAJ\" not found" beam(img)
+    p = "./data/M87_EHT_2018_3644_b3.fits"
+    if !isfile(p)
+        @warn "test file not found, skipping" p
+    else
+        img = VLBI.load(p)
+        KA = KeyedArray(img)
+        @test size(KA) == (128, 128)
+        @test maximum(KA) ≈ 7.676266878722255
+        @test KA[23, 22] ≈ 0.01466615223632145
+        @test axiskeys(KA, :ra)  .|> ustrip ≈ 0.07441406249999923:-0.001171874999999988:-0.07441406249999925
+        @test_throws "key \"BMAJ\" not found" beam(img)
+    end
 end
 
 @testitem "uvf simple" begin
