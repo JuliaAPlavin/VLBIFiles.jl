@@ -104,6 +104,25 @@ end
     @test VLBI.load(MultiComponentModel, VLBI.load("./data/map.fits")) == mod
 end
 
+@testitem "img read two CC tables" begin
+    using Unitful, UnitfulAstro, UnitfulAngles
+    using StaticArrays
+    using Statistics
+    using AxisKeys
+    cd(dirname(@__FILE__))
+
+    if isfile("./data/J0840-5732_X_2010_03_11_dew_map.fits")
+        img = VLBI.load(KeyedArray, "./data/J0840-5732_X_2010_03_11_dew_map.fits")
+        @test size(img) == (1024, 1024)
+        @test axiskeys(img, 1) ≈ (76.65:-0.15:-76.8)u"mas"  rtol=1e-5
+        
+        mod = VLBI.load(MultiComponentModel, "./data/J0840-5732_X_2010_03_11_dew_map.fits")
+        @test length(components(mod)) == 29  # reads last AIPS CC table (highest EXTVER)
+    else
+        @warn "test file not found, skipping: J0840-5732_X_2010_03_11_dew_map.fits"
+    end
+end
+
 @testitem "img stacked" begin
     using Unitful, UnitfulAstro, UnitfulAngles
     using StaticArrays

@@ -58,9 +58,21 @@ function load(::Type{MultiComponentModel}, src, ::Val{:mod})
     end
 end
 
+function _last_hdu(f::FITS, extname)
+    best_hdu = nothing
+    best_ver = -1
+    for i in 1:length(f)
+        FITSIO.fits_movabs_hdu(f.fitsfile, i)
+        FITSIO.fits_try_read_extname(f.fitsfile) == extname || continue
+        ver = get(read_header(f[i]), "EXTVER", 0)
+        ver >= best_ver && (best_hdu = f[i]; best_ver = ver)
+    end
+    best_hdu
+end
+
 function load(::Type{MultiComponentModel}, src, ::Val{:fits})
     mod = FITS(src) do f
-        @p f["AIPS CC"] |>
+        @p _last_hdu(f, "AIPS CC") |>
             columntable |>
             rowtable |>
             map() do c
