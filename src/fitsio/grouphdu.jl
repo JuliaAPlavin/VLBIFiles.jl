@@ -22,9 +22,8 @@ function Base.read(hdu::GroupedHDU)
     end
 
     ps_scalezero = ntuple(pcount) do i
-        h["PSCAL$i"], h["PZERO$i"]
+        get(h, "PSCAL$i", 1.0), get(h, "PZERO$i", 0.0)
     end
-    b_scalezero = h["BSCALE"], get(h, "BZERO", 0.0)
     haskey(h, "BSZERO") && @warn "FITS header contains BSZERO keyword, probably a typo"
 
     ptype = NTuple{pcount, Float32}
@@ -37,12 +36,12 @@ function Base.read(hdu::GroupedHDU)
     buf_grp = Array{Cfloat}(undef, pcount)
     buf_data = Array{Cfloat}(undef, Base.tail(sz))
 
-    _fill_data!(ngroups, hdu, buf_grp, buf_data, result_grp, result_data, ptype, ps_scalezero, b_scalezero)
+    _fill_data!(ngroups, hdu, buf_grp, buf_data, result_grp, result_data, ptype, ps_scalezero)
 
     return (; result_grp..., DATA=result_data)
 end
 
-function _fill_data!(ngroups, hdu, buf_grp, buf_data, result_grp, result_data, ::Type{ptype}, ps_scalezero, b_scalezero) where {ptype}
+function _fill_data!(ngroups, hdu, buf_grp, buf_data, result_grp, result_data, ::Type{ptype}, ps_scalezero) where {ptype}
     for groupix in 1:ngroups
         status = Ref{Cint}(0)
         @ccall FITSIO.libcfitsio.ffggpe(
@@ -68,7 +67,6 @@ function _fill_data!(ngroups, hdu, buf_grp, buf_data, result_grp, result_data, :
         )::Cint
         @assert anynul[] == 0
         FITSIO.fits_assert_ok(status[])
-        buf_data .= muladd.(buf_data, b_scalezero...)
 
         map(Tuple(result_grp), ptype(buf_grp), ps_scalezero) do vres, val, scalezero
             push!(vres, muladd(val, scalezero...))

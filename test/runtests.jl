@@ -634,6 +634,101 @@ end
     @test r1.freq_spec ≈ 228.166197u"GHz"  rtol=1e-4
 end
 
+@testitem "grouphdu double BSCALE/BZERO scaling" begin
+    using VLBIFiles: FITSIO, GroupedHDU
+    using VLBIFiles.FITSIO: FITS, read_header, fits_movabs_hdu, fits_get_img_size, fits_assert_ok, libcfitsio
+
+    # Read original file (BSCALE=1, BZERO=0)
+    f_orig = FITS("./data/vis.fits")
+    hdu_orig = GroupedHDU(f_orig.fitsfile, 1)
+    result_orig = read(hdu_orig)
+    close(f_orig)
+
+    # Create modified copy with non-trivial BSCALE/BZERO
+    tmpfile = tempname() * ".fits"
+    cp("./data/vis.fits", tmpfile)
+    f_mod = FITS(tmpfile, "r+")
+    FITSIO.fits_movabs_hdu(f_mod.fitsfile, 1)
+    status = Ref{Cint}(0)
+    @ccall FITSIO.libcfitsio.ffuky(f_mod.fitsfile.ptr::Ptr{Cvoid}, 82::Cint, "BSCALE"::Cstring, Ref(2.0)::Ptr{Cdouble}, C_NULL::Ptr{Cvoid}, status::Ref{Cint})::Cint
+    FITSIO.fits_assert_ok(status[])
+    @ccall FITSIO.libcfitsio.ffuky(f_mod.fitsfile.ptr::Ptr{Cvoid}, 82::Cint, "BZERO"::Cstring, Ref(10.0)::Ptr{Cdouble}, C_NULL::Ptr{Cvoid}, status::Ref{Cint})::Cint
+    FITSIO.fits_assert_ok(status[])
+    close(f_mod)
+
+    # Read modified file through GroupedHDU
+    f_mod2 = FITS(tmpfile)
+    hdu_mod = GroupedHDU(f_mod2.fitsfile, 1)
+    result_mod = read(hdu_mod)
+    close(f_mod2)
+    rm(tmpfile)
+
+    # Correct physical values: raw_on_disk * BSCALE + BZERO
+    # Since original had BSCALE=1,BZERO=0, result_orig.DATA contains raw values
+    expected = result_orig.DATA .* 2 .+ 10
+
+    @test result_mod.DATA ≈ expected
+end
+
+@testitem "grouphdu missing BSCALE keyword" begin
+    using VLBIFiles: FITSIO, GroupedHDU
+    using VLBIFiles.FITSIO: FITS, read_header, fits_movabs_hdu, fits_get_img_size, fits_assert_ok, libcfitsio
+
+    # Read original file
+    f_orig = FITS("./data/vis.fits")
+    result_orig = read(GroupedHDU(f_orig.fitsfile, 1))
+    close(f_orig)
+
+    # Create copy with BSCALE removed
+    tmpfile = tempname() * ".fits"
+    cp("./data/vis.fits", tmpfile)
+    f = FITS(tmpfile, "r+")
+    FITSIO.fits_movabs_hdu(f.fitsfile, 1)
+    status = Ref{Cint}(0)
+    @ccall FITSIO.libcfitsio.ffdkey(f.fitsfile.ptr::Ptr{Cvoid}, "BSCALE"::Cstring, status::Ref{Cint})::Cint
+    FITSIO.fits_assert_ok(status[])
+    close(f)
+
+    # Should produce identical results (BSCALE defaults to 1.0 per FITS standard)
+    f2 = FITS(tmpfile)
+    result = read(GroupedHDU(f2.fitsfile, 1))
+    close(f2)
+    rm(tmpfile)
+
+    @test result.DATA == result_orig.DATA
+end
+
+@testitem "grouphdu missing PSCAL/PZERO keywords" begin
+    using VLBIFiles: FITSIO, GroupedHDU
+    using VLBIFiles.FITSIO: FITS, read_header, fits_movabs_hdu, fits_get_img_size, fits_assert_ok, libcfitsio
+
+    # Read original file
+    f_orig = FITS("./data/vis.fits")
+    result_orig = read(GroupedHDU(f_orig.fitsfile, 1))
+    close(f_orig)
+
+    # Create copy with PSCAL4 and PZERO6 removed
+    # vis.fits has PSCAL4=1.0 and PZERO6=0.0, matching FITS defaults
+    tmpfile = tempname() * ".fits"
+    cp("./data/vis.fits", tmpfile)
+    f = FITS(tmpfile, "r+")
+    FITSIO.fits_movabs_hdu(f.fitsfile, 1)
+    status = Ref{Cint}(0)
+    @ccall FITSIO.libcfitsio.ffdkey(f.fitsfile.ptr::Ptr{Cvoid}, "PSCAL4"::Cstring, status::Ref{Cint})::Cint
+    FITSIO.fits_assert_ok(status[])
+    @ccall FITSIO.libcfitsio.ffdkey(f.fitsfile.ptr::Ptr{Cvoid}, "PZERO6"::Cstring, status::Ref{Cint})::Cint
+    FITSIO.fits_assert_ok(status[])
+    close(f)
+
+    # Should produce identical results (PSCAL defaults to 1.0, PZERO to 0.0)
+    f2 = FITS(tmpfile)
+    result = read(GroupedHDU(f2.fitsfile, 1))
+    close(f2)
+    rm(tmpfile)
+
+    @test result.DATA == result_orig.DATA
+end
+
 @testitem "_" begin
     import Aqua
     Aqua.test_all(VLBIFiles; ambiguities=false, piracies=false)
