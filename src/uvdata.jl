@@ -109,6 +109,7 @@ Base.@kwdef struct AntArray
     name::String
     freq::typeof(1f0u"Hz")
     antennas::Dictionary{Int, Antenna}
+    array_xyz::SVector{3, Float64} = SVector(NaN, NaN, NaN)
 end
 
 strfloat_to_float(x::AbstractFloat) = x
@@ -117,10 +118,16 @@ strfloat_to_float(x::String) = parse(Float64, replace(x, "D" => "E"))
 function AntArray(hdu::TableHDU)
     header = read_header(hdu)
     antennas = map(row -> row.NOSTA => Antenna(row), hdu |> columntable |> StructArray) |> dictionary
+    array_xyz = SVector(strfloat_to_float.((
+        get(header, "ARRAYX", NaN),
+        get(header, "ARRAYY", NaN),
+        get(header, "ARRAYZ", NaN),
+    )))
     AntArray(;
         name=header["ARRNAM"],
         freq=strfloat_to_float(header["FREQ"]) * u"Hz",
         antennas,
+        array_xyz,
     )
 end
 
