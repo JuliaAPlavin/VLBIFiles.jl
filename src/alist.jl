@@ -11,8 +11,10 @@ function load(::Type{Alist}, file)
         freq_spec = x.ref_freq*u"MHz"
         (;
             x.root_id, x.source, datetime, x.scan_id, x.length,
-            freq_spec, spec=VisSpec(Baseline(Symbol.(Tuple(x.baseline))), UV(x.u, x.v)),
+            freq_spec, spec=VisSpec(Baseline(Symbol.(Tuple(x.baseline))), UV(x.u * 1e6, x.v * 1e6)),
             stokes=Symbol(x.polarization),
+            # Lindy:
+            # total_phas adds in the a priori earth delay model at the reference time and frequency. you generally don't need to use it. you can use resid_phase
             value=x.amp / 1e4 * cis(deg2rad(x.resid_phas)) * (1 ±ᵤ (1 / x.snr)),
             x.snr
         )

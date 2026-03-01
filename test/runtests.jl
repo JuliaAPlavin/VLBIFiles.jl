@@ -760,6 +760,7 @@ end
     @test VLBI.antenna_names(r33) == (:A, :S)
     @test r33.stokes == :XL
     @test r33.snr ≈ 96.028893
+    @test UV(r33) == UV(6208e6, -3597e6)
     @test abs(VLBI.visibility(r33)) ≈ 2.5406718e-4  rtol=1e-4
 
     # freq_spec synthesized from ref_freq
