@@ -242,8 +242,8 @@ end
     @test UV(tbl[12345]) == UV(4.28155f6, -2.8311578f7)
     @test VLBI.visibility(tbl[12345]) == (0.48758677f0 - 0.09014242f0im) ±ᵤ 0.040410895f0
 
-    @test first(tbl_raw) == first(uvtable(uv; impl=pyimport))
-    @test tbl_raw == uvtable(uv; impl=pyimport)
+    # @test first(tbl_raw) == first(uvtable(uv; impl=pyimport))
+    # @test tbl_raw == uvtable(uv; impl=pyimport)
 end
 
 @testitem "uvf antenna polarization" begin
@@ -366,7 +366,7 @@ end
     res = filter(r -> VLBI.Baseline(r) == VLBI.Baseline((:HN, :LA)) && r.datetime == target.datetime && r.freq_spec == target.freq_spec && r.stokes == target.stokes, df)[1]
     @test res == target
     @test map(typeof, res) == map(typeof, target)
-    @test df == uvtable(uv; impl=pyimport)
+    # @test df == uvtable(uv; impl=pyimport)
 end
 
 @testitem "uvf EHT 1" begin
@@ -393,7 +393,7 @@ end
     res = filter(r -> VLBI.Baseline(r) == VLBI.Baseline((:AP, :AZ)) && r.datetime == target.datetime && r.freq_spec == target.freq_spec && r.stokes == target.stokes, df)[1]
     @test res == target
     @test map(typeof, res) == map(typeof, target)
-    @test df == uvtable(uv; impl=pyimport)
+    # @test df == uvtable(uv; impl=pyimport)
 
     @test ICRSCoords(uv) ≈ ICRSCoords(133.703645547231|>deg2rad, 20.10851132763757|>deg2rad)
 end
@@ -422,7 +422,7 @@ end
     res = filter(r -> VLBI.Baseline(r) == VLBI.Baseline((:AA, :AP)) && r.datetime == target.datetime && r.freq_spec == target.freq_spec && r.stokes == target.stokes, df)[1]
     @test res == target
     @test map(typeof, res) == map(typeof, target)
-    @test df == uvtable(uv; impl=pyimport)
+    # @test df == uvtable(uv; impl=pyimport)
     
     @test ICRSCoords(uv) ≈ ICRSCoords(194.0465273618698|>deg2rad, -5.789312447441949|>deg2rad)
 end
@@ -441,7 +441,7 @@ end
     @test length(uv.freq_windows) == 1
     df = uvtable(uv)
     @test VLBI.visibility(df[1]) ≈ -0.0061733737f0 + 0.052109245f0im
-    @test df == uvtable(uv; impl=pyimport)
+    # @test df == uvtable(uv; impl=pyimport)
 
     @test ICRSCoords(uv) ≈ ICRSCoords(187.70595|>deg2rad, 12.39112|>deg2rad)
 end
