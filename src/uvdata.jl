@@ -5,6 +5,7 @@ Base.@kwdef struct FrequencyWindow
     width::typeof(1f0u"Hz")
     nchan::Int16
     sideband::Int8
+    crpix::Float32 = 1f0
 end
 
 frequency(fw::FrequencyWindow, kind::Symbol=:reference) = if kind == :reference
@@ -12,7 +13,8 @@ frequency(fw::FrequencyWindow, kind::Symbol=:reference) = if kind == :reference
 elseif kind == :average
     @assert fw.sideband == 1
     @assert fw.nchan > 0
-    fw.freq + fw.width / 2
+    ch_width = fw.width / fw.nchan
+    fw.freq + ch_width * ((fw.nchan + 1) / 2f0 - fw.crpix)
 else
     error("Unsupported kind: $kind")
 end
@@ -20,7 +22,10 @@ end
 function frequency(fw::FrequencyWindow, ::Type{Interval})
     @assert fw.sideband == 1
     @assert fw.nchan > 0
-    return fw.freq .. (fw.freq + fw.width)
+    ch_width = fw.width / fw.nchan
+    lo = fw.freq + ch_width * (1 - fw.crpix) - ch_width / 2
+    hi = fw.freq + ch_width * (fw.nchan - fw.crpix) + ch_width / 2
+    return lo .. hi
 end
 
 frequency(freq::AbstractVector{<:VLBIFiles.FrequencyWindow}, ::Type{Interval}) = @p freq flatmap(endpoints(frequency(_, Interval))) extrema Interval(__...)
@@ -28,24 +33,29 @@ frequency(freq::AbstractVector{<:VLBIFiles.FrequencyWindow}, ::Type{Interval}) =
 function frequencies(fw::FrequencyWindow)
     @assert fw.sideband == 1
     @assert fw.nchan > 0
-    return Float64(fw.freq) .+ (0.5:(fw.nchan-0.5)) .* (fw.width/fw.nchan)
+    ch_width = fw.width / fw.nchan
+    return Float64(fw.freq) .+ ((1:fw.nchan) .- fw.crpix) .* ch_width
 end
 
 Base.isless(a::FrequencyWindow, b::FrequencyWindow) = a.freq < b.freq
 
-Statistics.mean(xs::AbstractVector{<:FrequencyWindow}) = FrequencyWindow(
-    first(xs).freqid,
-    first(xs).ix,
-    (@p xs map(_.freq) mean),
-    (@p xs map(_.width) sum),
-    (@p xs map(_.nchan) sum),
-    (@p xs map(_.sideband) uniqueonly),
-)
+function Statistics.mean(xs::AbstractVector{<:FrequencyWindow})
+    nchan = (@p xs map(_.nchan) sum)
+    FrequencyWindow(
+        first(xs).freqid,
+        first(xs).ix,
+        (@p xs map(_.freq) mean),
+        (@p xs map(_.width) sum),
+        nchan,
+        (@p xs map(_.sideband) uniqueonly),
+        Float32((nchan + 1) / 2),
+    )
+end
 
 function VLBIData._aggfreq(freq_specs::AbstractVector{<:FrequencyWindow})
     mean_freq = mean(fs -> fs.freq, freq_specs)
     total_width = sum(fs -> fs.width, freq_specs)
-    return VLBIFiles.FrequencyWindow(0, 0, mean_freq, total_width, 1, 1)
+    return VLBIFiles.FrequencyWindow(0, 0, mean_freq, total_width, 1, 1, 1f0)
 end
 
 Base.@kwdef struct UVHeader
@@ -153,7 +163,7 @@ end
 
 FITSIO.FITS(uvdata::UVData) = FITS(uvdata.path)
 
-function read_freqs(uvh, fq_table)
+function read_freqs(uvh, fq_table; crpix)
     ref_freq = @oget frequency(uvh) read_header(fq_table)["REF_FREQ"]*u"Hz"
 	fq_table = fq_table |> StructArrays.fromtable
     res = @p fq_table flatmap() do fq_row
@@ -174,6 +184,7 @@ function read_freqs(uvh, fq_table)
 	            width=total_bw * u"Hz",
 	            nchan,
 	            sideband=r.SIDEBAND,
+	            crpix,
 	        )
 	    end
 	end
@@ -299,7 +310,8 @@ function load(::Type{UVData}, path)
             nothing
         end
     end
-    freq_windows = read_freqs(header, @oget fits["AIPS FQ"] fits["FREQUENCY"])
+    freq_crpix = get(axis_dict(header.fits, "FREQ"), "CRPIX", 1.0)
+    freq_windows = read_freqs(header, @oget fits["AIPS FQ"] fits["FREQUENCY"]; crpix=freq_crpix)
     ant_arrays = AntArray[]
     for i in Iterators.countfrom(1)
         hdu = try

@@ -221,8 +221,8 @@ end
     @test map(a -> a.name, antarr.antennas) |> collect == [:BR, :FD, :HN, :KP, :LA, :MK, :NL, :OV, :PT, :SC]
 
     @test frequency(uv.freq_windows[1]) == 1.5329522f10u"Hz"
-    @test frequency(uv.freq_windows[1], VLBIFiles.Interval) == VLBIFiles.Interval(1.5329522f10u"Hz", 1.5337521f10u"Hz")
-    @test VLBIFiles.frequencies(uv.freq_windows[1]) == (1.5333521664e10:8.0e6:1.5333521664e10)u"Hz"
+    @test frequency(uv.freq_windows[1], VLBIFiles.Interval) == VLBIFiles.Interval(1.5325522f10u"Hz", 1.5333521f10u"Hz")
+    @test VLBIFiles.frequencies(uv.freq_windows[1]) == (1.5329521664e10:8.0e6:1.5329521664e10)u"Hz"
 
     tbl_raw = uvtable(uv)
     @test length(tbl_raw) == 160560
@@ -233,13 +233,13 @@ end
     @test tbl[12345] == (
         datetime = DateTime("2010-12-24T08:06:25"),
         stokes = :RR,
-        freq_spec = VLBI.FrequencyWindow(1, 6, 1.5369459f10u"Hz", 8.0f6u"Hz", 1, 1),
-        spec = VLBI.VisSpec(VLBI.Baseline((:FD, :PT)), UV([4.282665f6, -2.8318948f7])),
+        freq_spec = VLBI.FrequencyWindow(1, 6, 1.5369459f10u"Hz", 8.0f6u"Hz", 1, 1, 1.0f0),
+        spec = VLBI.VisSpec(VLBI.Baseline((:FD, :PT)), UV([4.28155f6, -2.8311578f7])),
         value = (0.48758677f0 - 0.09014242f0im) ±ᵤ 0.040410895f0
     )
     @test VLBI.antenna_names(tbl[12345]) == (:FD, :PT)
     @test VLBI.Baseline(tbl[12345]) == VLBI.Baseline((:FD, :PT))
-    @test UV(tbl[12345]) == UV(4.282665f6, -2.8318948f7)
+    @test UV(tbl[12345]) == UV(4.28155f6, -2.8311578f7)
     @test VLBI.visibility(tbl[12345]) == (0.48758677f0 - 0.09014242f0im) ±ᵤ 0.040410895f0
 
     @test first(tbl_raw) == first(uvtable(uv; impl=pyimport))
@@ -354,13 +354,13 @@ end
 
     uv = VLBI.load(VLBI.UVData, "./data/vis_multichan.vis")
     @test length(uv.freq_windows) == 8
-    @test VLBIFiles.frequencies(uv.freq_windows[1]) == (4.601240208e9:500000.0:4.608740208e9)u"Hz"
+    @test VLBIFiles.frequencies(uv.freq_windows[1]) == (4.600990208e9:500000.0:4.608490208e9)u"Hz"
     df = uvtable(uv)
     target = (
         datetime = DateTime("1996-06-05T19:16:45.001"),
         stokes = :LL,
-        freq_spec = VLBI.FrequencyWindow(1, 3, 4.84099f9u"Hz", 8.0f6u"Hz", 16, 1),
-        spec = VLBI.VisSpec(VLBI.Baseline((:HN, :LA)), UV([3.6239796f7, 1.2843347f7])),
+        freq_spec = VLBI.FrequencyWindow(1, 3, 4.84099f9u"Hz", 8.0f6u"Hz", 16, 1, 1.0f0),
+        spec = VLBI.VisSpec(VLBI.Baseline((:HN, :LA)), UV([3.623793f7, 1.2842684f7])),
         value = (-0.21484283f0 - 0.35979474f0im) ±ᵤ (1/√3.0233376f0)
     )
     res = filter(r -> VLBI.Baseline(r) == VLBI.Baseline((:HN, :LA)) && r.datetime == target.datetime && r.freq_spec == target.freq_spec && r.stokes == target.stokes, df)[1]
@@ -386,8 +386,8 @@ end
     target = (
         datetime = Dates.DateTime("2017-04-10T00:58:45.005"), 
         stokes = :RR, 
-        freq_spec = VLBI.FrequencyWindow(1, 1, 2.270707f11u"Hz", 1.856f9u"Hz", 1, 1), 
-        spec = VLBI.VisSpec(VLBI.Baseline((:AP, :AZ)), UV([2.9769375f9, -4.5123123f9])), 
+        freq_spec = VLBI.FrequencyWindow(1, 1, 2.270707f11u"Hz", 1.856f9u"Hz", 1, 1, 1.0f0),
+        spec = VLBI.VisSpec(VLBI.Baseline((:AP, :AZ)), UV([2.9648207f9, -4.4939464f9])), 
         value = (0.5662228f0 + 0.014944182f0im) ±ᵤ (1/√117.818825f0)
     )
     res = filter(r -> VLBI.Baseline(r) == VLBI.Baseline((:AP, :AZ)) && r.datetime == target.datetime && r.freq_spec == target.freq_spec && r.stokes == target.stokes, df)[1]
@@ -415,8 +415,8 @@ end
     target = (
         datetime = Dates.DateTime("2017-04-11T02:14:55"), 
         stokes = :RR, 
-        freq_spec = VLBI.FrequencyWindow(1, 1, 2.290707f11u"Hz", 1.856f9u"Hz", 1, 1), 
-        spec = VLBI.VisSpec(VLBI.Baseline((:AA, :AP)), UV([687115.25f0, -1.8692805f6])), 
+        freq_spec = VLBI.FrequencyWindow(1, 1, 2.290707f11u"Hz", 1.856f9u"Hz", 1, 1, 1.0f0),
+        spec = VLBI.VisSpec(VLBI.Baseline((:AA, :AP)), UV([684342.9f0, -1.8617382f6])), 
         value = (-1.1796279f0 - 7.8919725f0im) ±ᵤ (1/√40441.19f0)
     )
     res = filter(r -> VLBI.Baseline(r) == VLBI.Baseline((:AA, :AP)) && r.datetime == target.datetime && r.freq_spec == target.freq_spec && r.stokes == target.stokes, df)[1]
@@ -596,6 +596,49 @@ end
 #         end
 #     end
 # end
+
+@testitem "frequency correctness CRPIX=1" begin
+    using Unitful
+    cd(dirname(@__FILE__))
+
+    uv = VLBI.load(VLBI.UVData, "./data/vis.fits")
+    fw = uv.freq_windows[1]  # nchan=1, width=8MHz
+    # With nchan=1 and CRPIX=1, the single channel center IS fw.freq
+    @test VLBIFiles.frequencies(fw) ≈ [ustrip(fw.freq)]u"Hz"  rtol=1e-6
+    # Average of a single channel = that channel's center
+    @test frequency(fw, :average) ≈ fw.freq  rtol=1e-6
+end
+
+@testitem "frequency correctness CRPIX=1 multichan" begin
+    using Unitful
+    cd(dirname(@__FILE__))
+
+    uv = VLBI.load(VLBI.UVData, "./data/vis_multichan.vis")
+    fw = uv.freq_windows[1]  # nchan=16, ch_width=500kHz
+    freqs = VLBIFiles.frequencies(fw)
+    # First channel center should be at fw.freq (not fw.freq + ch_width/2)
+    @test freqs[1] ≈ fw.freq  rtol=1e-6
+    # Last channel center should be at fw.freq + 15*ch_width
+    ch_width = fw.width / fw.nchan
+    @test freqs[end] ≈ fw.freq + 15 * ch_width  rtol=1e-6
+end
+
+@testitem "frequency correctness CRPIX≠1" begin
+    using Unitful
+    cd(dirname(@__FILE__))
+
+    p = joinpath(@__DIR__, "data", "BL146_1.fits")
+    isfile(p) || download("https://fits.gsfc.nasa.gov/registry/fitsidi/BL146_1.fits", p)
+
+    uvf = VLBI.load(VLBI.UVData, p)
+    fw = uvf.freq_windows[1]  # nchan=8, CRPIX=0.53125
+
+    # Correct channel 1 freq: CRVAL + BANDFREQ + CDELT*(1 - CRPIX)
+    # = 8.40549e9 + 0 + 1e6*(1 - 0.53125) = 8405958750.0
+    freqs = VLBIFiles.frequencies(fw)
+    @test freqs[1] ≈ 8.40595875e9u"Hz"  rtol=1e-6
+    @test freqs[end] ≈ 8.41295875e9u"Hz"  rtol=1e-6
+end
 
 @testitem "alist" begin
     using Dates
