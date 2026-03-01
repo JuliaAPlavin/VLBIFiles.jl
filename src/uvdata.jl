@@ -137,9 +137,9 @@ function Baseline_from_fits(b::Real)
 end
 function Baseline_from_fits(b::Real, antarrays)
     bi = floor(Int, b)
-    arri = floor(Int, (b % 1) * 100) + 1
+    arri = round(Int, (b % 1) * 100) + 1
     a1, a2 = bi ÷ 256, bi % 256
-    return Baseline(1, (a1, a2), antarrays)
+    return Baseline(arri, (a1, a2), antarrays)
 end
 
 function VLBIData.Baseline(array_ix::Integer, ant_ids::NTuple{2, Integer}, ant_arrays::Vector{AntArray})

@@ -767,6 +767,41 @@ end
     @test r1.freq_spec ≈ 228.166197u"GHz"  rtol=1e-4
 end
 
+@testitem "uvf multi-array baselines" begin
+    using Unitful, UnitfulAstro, UnitfulAngles
+    using Dates
+
+    p = joinpath(@__DIR__, "data", "J1256-0547_X_2020_10_18_pet_vis.fits")
+    isfile(p) || download("https://astrogeo.org/images/J1256-0547/J1256-0547_X_2020_10_18_pet_vis.fits", p)
+
+    uv = VLBI.load(VLBI.UVData, p)
+    @test uv.header.object == "J1256-0547"
+    @test uv.header.date_obs == Date(2020, 10, 18)
+    @test length(uv.ant_arrays) == 3
+    @test length(uv.ant_arrays[1].antennas) == 8
+    @test length(uv.ant_arrays[2].antennas) == 9
+    @test length(uv.ant_arrays[3].antennas) == 10
+
+    # Reading data should produce no "Antenna index out of bounds" warnings
+    data = @test_nowarn VLBI.read_data_arrays(uv)
+
+    # Baselines from array 2 (has antenna 9 = SC) should resolve correctly
+    bls = data[:baseline]
+    all_names = Set{Symbol}()
+    for b in bls
+        push!(all_names, b.antennas...)
+    end
+    @test :SC in all_names
+    @test :PT in all_names
+    @test !any(n -> startswith(string(n), "ANT"), all_names)
+
+    # Verify array index is used correctly in Baseline_from_fits
+    # Array 1 (frac=0.0): 8 antennas, Array 2 (frac≈0.01): 9, Array 3 (frac≈0.02): 10
+    @test VLBIFiles.Baseline_from_fits(258.0, uv.ant_arrays) === VLBI.Baseline((:BR, :FD))    # array 1
+    @test VLBIFiles.Baseline_from_fits(Float32(265.01), uv.ant_arrays) === VLBI.Baseline((:BR, :SC))  # array 2, ant 9
+    @test VLBIFiles.Baseline_from_fits(Float32(266.02), uv.ant_arrays) === VLBI.Baseline((:BR, :SC))  # array 3, ant 10
+end
+
 @testitem "grouphdu double BSCALE/BZERO scaling" begin
     using VLBIFiles: FITSIO, GroupedHDU
     using VLBIFiles.FITSIO: FITS, read_header, fits_movabs_hdu, fits_get_img_size, fits_assert_ok, libcfitsio
