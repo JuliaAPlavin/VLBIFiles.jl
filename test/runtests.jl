@@ -518,6 +518,95 @@ end
     end
 end
 
+@testitem "uvf NAXIS=6 no IF axis (DDTSUVDATA)" begin
+    using Unitful, UnitfulAstro, UnitfulAngles
+    using Dates
+
+    p = joinpath(@__DIR__, "data", "DDTSUVDATA.fits")
+    isfile(p) || download("https://fits.gsfc.nasa.gov/samples/DDTSUVDATA.fits", p)
+
+    uv = VLBI.load(VLBI.UVData, p)
+    @test uv.header.date_obs == Date(1984, 1, 29)
+    @test uv.header.stokes == [:RR, :LL, :RL, :LR]
+    @test frequency(uv.header) ≈ 1.420014u"GHz" rtol=1e-4
+    @test length(uv.freq_windows) == 1
+    @test length(uv.ant_arrays) == 1
+    @test length(only(uv.ant_arrays).antennas) == 28
+
+    raw = VLBI.read_data_raw(uv)
+    @test size(raw[:DATA])[end] == 7956
+
+    tbl = uvtable(uv)
+    @test length(tbl) > 0
+end
+
+@testitem "uvf NAXIS=6 no IF axis (ATCA)" begin
+    using Unitful, UnitfulAstro, UnitfulAngles
+    using Dates
+
+    p = joinpath(@__DIR__, "data", "0332-391.uvfits")
+    isfile(p) || download("https://github.com/astro-informatics/purify/raw/development/data/atca/0332-391.uvfits", p)
+
+    uv = VLBI.load(VLBI.UVData, p)
+    @test uv.header.date_obs == Date(2001, 5, 20)
+    @test uv.header.stokes == [:I, :Q, :U, :V]
+    @test frequency(uv.header) ≈ 1.432u"GHz" rtol=1e-3
+    @test length(uv.freq_windows) == 1
+    @test uv.freq_windows[1].nchan == 13
+    @test length(uv.ant_arrays) == 1
+    @test length(only(uv.ant_arrays).antennas) == 6
+
+    raw = VLBI.read_data_raw(uv)
+    @test size(raw[:DATA])[end] == 22675
+
+    tbl = uvtable(uv)
+    @test length(tbl) > 0
+end
+
+@testitem "uvf linear polarization (MWA)" begin
+    using Unitful, UnitfulAstro, UnitfulAngles
+    using Dates
+
+    p = joinpath(@__DIR__, "data", "mwa_1061316296.uvfits")
+    isfile(p) || download("https://github.com/RadioAstronomySoftwareGroup/rasg-datasets/raw/v0.0.4/visibility_data/MWA/1061316296.uvfits", p)
+
+    uv = VLBI.load(VLBI.UVData, p)
+    @test uv.header.stokes == [:XX, :YY, :XY, :YX]
+    @test uv.header.date_obs == Date(2013, 8, 23)
+    @test frequency(uv.header) ≈ 167.075u"MHz" rtol=1e-3
+    @test length(uv.freq_windows) == 1
+    @test length(uv.ant_arrays) == 1
+
+    raw = VLBI.read_data_raw(uv)
+    @test size(raw[:DATA])[end] == 16256
+
+    tbl = uvtable(uv)
+    # All data in this file is flagged (weight=-0.0), so table is empty after filtering
+    @test length(tbl) == 0
+end
+
+@testitem "uvf NAXIS=6 linear pol (PAPER)" begin
+    using Unitful, UnitfulAstro, UnitfulAngles
+    using Dates
+
+    p = joinpath(@__DIR__, "data", "paper_zen.uvfits")
+    isfile(p) || download("https://github.com/RadioAstronomySoftwareGroup/rasg-datasets/raw/v0.0.4/visibility_data/PAPER/zen.2456865.60537.xy.uvcRREAAM.uvfits", p)
+
+    uv = VLBI.load(VLBI.UVData, p)
+    @test uv.header.stokes == [:XY]
+    @test uv.header.date_obs == Date(2014, 7, 27)
+    @test frequency(uv.header) ≈ 100.0u"MHz" rtol=1e-3
+    @test length(uv.freq_windows) == 1
+    @test uv.freq_windows[1].nchan == 11
+    @test length(uv.ant_arrays) == 1
+
+    raw = VLBI.read_data_raw(uv)
+    @test size(raw[:DATA])[end] == 285
+
+    tbl = uvtable(uv)
+    @test length(tbl) > 0
+end
+
 @testitem "difmap model" begin
     using Unitful, UnitfulAstro, UnitfulAngles
     cd(dirname(@__FILE__))

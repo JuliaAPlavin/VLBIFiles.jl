@@ -56,7 +56,11 @@ function named_axiskeys_tablecol(fh::FITSHeader)
     end NamedTuple
 end
 
-const val_to_stokes = Dict(-4 => :LR, -3 => :RL, -2 => :LL, -1 => :RR, 1 => :I, 2 => :Q, 3 => :U, 4 => :V)
+const val_to_stokes = Dict(
+    -8 => :YX, -7 => :XY, -6 => :YY, -5 => :XX,
+    -4 => :LR, -3 => :RL, -2 => :LL, -1 => :RR,
+    1 => :I, 2 => :Q, 3 => :U, 4 => :V,
+)
 
 function named_axiskeys_tablecol_fitsidi(fh::FITSHeader)
     base = named_axiskeys_tablecol(fh)

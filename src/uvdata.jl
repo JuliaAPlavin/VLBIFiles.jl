@@ -11,30 +11,27 @@ end
 frequency(fw::FrequencyWindow, kind::Symbol=:reference) = if kind == :reference
     fw.freq
 elseif kind == :average
-    @assert fw.sideband == 1
     @assert fw.nchan > 0
-    ch_width = fw.width / fw.nchan
-    fw.freq + ch_width * ((fw.nchan + 1) / 2f0 - fw.crpix)
+    cdelt = fw.sideband * fw.width / fw.nchan
+    fw.freq + cdelt * ((fw.nchan + 1) / 2f0 - fw.crpix)
 else
     error("Unsupported kind: $kind")
 end
 
 function frequency(fw::FrequencyWindow, ::Type{Interval})
-    @assert fw.sideband == 1
     @assert fw.nchan > 0
-    ch_width = fw.width / fw.nchan
-    lo = fw.freq + ch_width * (1 - fw.crpix) - ch_width / 2
-    hi = fw.freq + ch_width * (fw.nchan - fw.crpix) + ch_width / 2
-    return lo .. hi
+    cdelt = fw.sideband * fw.width / fw.nchan
+    lo = fw.freq + cdelt * (1 - fw.crpix) - cdelt / 2
+    hi = fw.freq + cdelt * (fw.nchan - fw.crpix) + cdelt / 2
+    return min(lo, hi) .. max(lo, hi)
 end
 
 frequency(freq::AbstractVector{<:VLBIFiles.FrequencyWindow}, ::Type{Interval}) = @p freq flatmap(endpoints(frequency(_, Interval))) extrema Interval(__...)
 
 function frequencies(fw::FrequencyWindow)
-    @assert fw.sideband == 1
     @assert fw.nchan > 0
-    ch_width = fw.width / fw.nchan
-    return Float64(fw.freq) .+ ((1:fw.nchan) .- fw.crpix) .* ch_width
+    cdelt = fw.sideband * fw.width / fw.nchan
+    return Float64(fw.freq) .+ ((1:fw.nchan) .- fw.crpix) .* cdelt
 end
 
 Base.isless(a::FrequencyWindow, b::FrequencyWindow) = a.freq < b.freq
@@ -74,18 +71,27 @@ function UVHeader(fh::FITSHeader)
         # FITS IDI
     else
         # uvfits
-        @assert fh["CTYPE6"] == "RA" && fh["CTYPE7"] == "DEC"
-        @assert fh["CTYPE4"] == "FREQ"
-        @assert fh["CTYPE2"] == "COMPLEX" && fh["NAXIS2"] == 3
+        axtypes = axis_types(fh)
+        @assert "RA" in axtypes && "DEC" in axtypes
+        @assert "FREQ" in axtypes
+        @assert "COMPLEX" in axtypes && fh["NAXIS$(axis_ind(fh, "COMPLEX"))"] == 3
     end
 
     stokes = [val_to_stokes[val] for val in axis_vals(fh, "STOKES")]
-    date_obs = match(r"([\d-]+)(\(\d+\))?", fh["DATE-OBS"]).captures[1]
+    date_obs_str = fh["DATE-OBS"]
+    date_obs = if occursin("/", date_obs_str)
+        # Old FITS format: DD/MM/YY (20th century)
+        d = Date(date_obs_str, dateformat"d/m/y")
+        year(d) < 100 ? d + Year(1900) : d
+    else
+        # Modern format: YYYY-MM-DD (possibly with time suffix)
+        Date(match(r"([\d-]+)", date_obs_str).captures[1], dateformat"Y-m-d")
+    end
 
     return UVHeader(
         fits=fh,
         object=(@oget fh["OBJECT"]),
-        date_obs=Date(date_obs, dateformat"Y-m-d"),
+        date_obs=date_obs,
         stokes=stokes,
         frequency=axis_dict(fh, "FREQ")["CRVAL"]*u"Hz",
     )
@@ -93,7 +99,7 @@ end
 
 
 function VLBIData.Antenna(hdu_row::NamedTuple)
-    if !isempty(hdu_row.ORBPARM) && hdu_row.ORBPARM != 0
+    if haskey(hdu_row, :ORBPARM) && !isempty(hdu_row.ORBPARM) && hdu_row.ORBPARM != 0
         @warn "Antennas with ORBPARM detected, be careful" hdu_row.ORBPARM hdu_row.ANNAME
     end
     poltypes = haskey(hdu_row, :POLTYA) ? Symbol.((hdu_row.POLTYA, hdu_row.POLTYB)) : (:UNK, :UNK)
@@ -176,7 +182,7 @@ function read_freqs(uvh, fq_table; crpix)
 	        total_bw = @oget r[S"TOTAL BANDWIDTH"] r[S"TOTAL_BANDWIDTH"]
 	        ch_width = @oget r[S"CH WIDTH"] r[S"CH_WIDTH"]
 	        curfreq = @oget r[S"IF FREQ"] r[S"BANDFREQ"]
-	        nchan = Int(total_bw / ch_width)
+	        nchan = Int(total_bw / abs(ch_width))
 	        FrequencyWindow(;
                 freqid=(@oget fq_row.FREQID 1),
 	            ix,
@@ -209,10 +215,16 @@ function read_data_arrays(uvdata::UVData, impl=identity)
         filteronly(_ ⊆ keys(raw))
     end
 
-    count = size(raw[:DATA])[end]
+    data_arr = raw[:DATA]
+    # When IF axis is absent (NAXIS=6), insert singleton IF dimension
+    if ndims(data_arr) == 6  # COMPLEX, STOKES, FREQ, RA, DEC, groups
+        sz = size(data_arr)
+        data_arr = reshape(data_arr, sz[1], sz[2], sz[3], 1, sz[4], sz[5], sz[6])
+    end
+    count = size(data_arr)[end]
     n_if = length(uvdata.freq_windows)
     n_chan = map(fw -> fw.nchan, uvdata.freq_windows) |> unique |> only
-    axarr = KeyedArray(raw[:DATA],
+    axarr = KeyedArray(data_arr,
         COMPLEX=[:re, :im, :wt],
         STOKES=uvdata.header.stokes,
         FREQ=1:n_chan,
@@ -228,7 +240,7 @@ function read_data_arrays(uvdata::UVData, impl=identity)
     data = (;
         uvw_m,
         baseline,
-        datetime = julian_day.(Float64.(raw[:DATE]) .+ raw[:_DATE]),
+        datetime = julian_day.(Float64.(raw[:DATE]) .+ (haskey(raw, :_DATE) ? raw[:_DATE] : 0)),
         visibility = complex.(axarr(COMPLEX=:re), axarr(COMPLEX=:im)),
         weight = axarr(COMPLEX=:wt),
     )
@@ -311,7 +323,24 @@ function load(::Type{UVData}, path)
         end
     end
     freq_crpix = get(axis_dict(header.fits, "FREQ"), "CRPIX", 1.0)
-    freq_windows = read_freqs(header, @oget fits["AIPS FQ"] fits["FREQUENCY"]; crpix=freq_crpix)
+    fq_table = @oget fits["AIPS FQ"] fits["FREQUENCY"] nothing
+    freq_windows = if fq_table !== nothing
+        read_freqs(header, fq_table; crpix=freq_crpix)
+    else
+        # No FQ table: construct from header FREQ axis
+        fd = axis_dict(header.fits, "FREQ")
+        nchan = @oget fd["NAXIS"] fd["MAXIS"]
+        cdelt = fd["CDELT"]
+        [FrequencyWindow(;
+            freqid=1,
+            ix=1,
+            freq=Float32(fd["CRVAL"]) * u"Hz",
+            width=Float32(nchan * abs(cdelt)) * u"Hz",
+            nchan=Int16(nchan),
+            sideband=Int8(sign(cdelt)),
+            crpix=Float32(freq_crpix),
+        )]
+    end
     ant_arrays = AntArray[]
     for i in Iterators.countfrom(1)
         hdu = try
