@@ -99,7 +99,7 @@ function _multi_collect(cols, ctx::MmapTableContext, dests=map(similar, cols))
 end
 
 @inline function _extract_row!(dests, cols, row_ptr::Ptr{UInt8}, idx::Int)
-    map(dests, cols) do dest, col
+    @inline map(dests, cols) do dest, col
         _extract_one!(dest, col, row_ptr, idx)
     end
 end
