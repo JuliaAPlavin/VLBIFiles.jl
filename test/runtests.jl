@@ -628,6 +628,23 @@ end
     @test collect(tbl_ag.NOSTA) == Int32[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
     close(fits2)
+
+    # Test materialize_columns (single-pass multi-column collect)
+    fits3 = FITSIO.FITS(p)
+    tbl3 = VLBIFiles.lazycolumntable(fits3["UV_DATA"])
+
+    # Tuple of columns
+    src_m, bl_m = VLBIFiles.materialize_columns((tbl3.SOURCE, tbl3.BASELINE))
+    @test src_m == collect(tbl3.SOURCE)
+    @test bl_m == collect(tbl3.BASELINE)
+
+    # NamedTuple of columns
+    result = VLBIFiles.materialize_columns((; SOURCE=tbl3.SOURCE, DATE=tbl3.DATE, INTTIM=tbl3.INTTIM))
+    @test result.SOURCE == collect(tbl3.SOURCE)
+    @test result.DATE == collect(tbl3.DATE)
+    @test result.INTTIM == collect(tbl3.INTTIM)
+
+    close(fits3)
 end
 
 @testitem "uvf NAXIS=6 no IF axis (DDTSUVDATA)" begin

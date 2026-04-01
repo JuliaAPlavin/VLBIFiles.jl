@@ -52,64 +52,32 @@ function Base.getindex(col::MmapColumn{Vector{T}, T}, i::Int) where {T<:Number}
     return result
 end
 
-# --- Fast bulk copyto! for scalar columns ---
+# --- Fast bulk collect via single-pass pread ---
 
-function Base.copyto!(dest::Vector{T}, col::MmapColumn{T, T}) where {T<:Number}
-    nrows = col.ctx.nrows
-    row_bytes = col.ctx.row_bytes
-    col_offset = col.col_offset
+Base.collect(col::MmapColumn) = only(materialize_columns((col,)))
+Base.copyto!(dest::AbstractVector, col::MmapColumn) = (_multi_collect((col,), col.ctx, (dest,)); dest)
+
+# --- Multi-column single-pass collect ---
+
+function materialize_columns(cols::Union{Tuple, NamedTuple})
+    @assert all(c -> c isa MmapColumn, cols)
+    @assert allequal(c.ctx for c in cols)
+    _multi_collect(cols, first(cols).ctx)
+end
+
+function _multi_collect(cols, ctx::MmapTableContext, dests=map(similar, cols))
+    nrows = ctx.nrows
+    row_bytes = ctx.row_bytes
     bufsize = 32 * 1024 * 1024
     rows_per_buf = max(1, bufsize ÷ row_bytes)
     buf = Vector{UInt8}(undef, rows_per_buf * row_bytes)
 
-    fd = ccall(:open, Cint, (Cstring, Cint), col.ctx.filepath, 0)
-    fd == -1 && error("Failed to open $(col.ctx.filepath)")
+    fd = ccall(:open, Cint, (Cstring, Cint), ctx.filepath, 0)
+    fd == -1 && error("Failed to open $(ctx.filepath)")
     try
         dest_idx = 1
         rows_remaining = nrows
-        file_pos = Int64(col.ctx.data_start)
-        while rows_remaining > 0
-            rows_this = min(rows_per_buf, rows_remaining)
-            nbytes = ccall(:pread, Cssize_t, (Cint, Ptr{UInt8}, Csize_t, Int64),
-                fd, buf, rows_this * row_bytes, file_pos)
-            nbytes < rows_this * row_bytes && error("Short read: got $nbytes, expected $(rows_this * row_bytes)")
-            p = pointer(buf)
-            for r in 0:(rows_this - 1)
-                @inbounds dest[dest_idx] = ntoh(unsafe_load(Ptr{T}(p + r * row_bytes + col_offset)))
-                dest_idx += 1
-            end
-            file_pos += rows_this * row_bytes
-            rows_remaining -= rows_this
-        end
-    finally
-        ccall(:close, Cint, (Cint,), fd)
-    end
-    return dest
-end
-
-function Base.collect(col::MmapColumn{T, T}) where {T<:Number}
-    dest = Vector{T}(undef, col.ctx.nrows)
-    copyto!(dest, col)
-end
-
-# --- Fast bulk collect for array columns ---
-
-function Base.collect(col::MmapColumn{Vector{T}, T}) where {T<:Number}
-    nrows = col.ctx.nrows
-    row_bytes = col.ctx.row_bytes
-    col_offset = col.col_offset
-    repeat = col.repeat
-    bufsize = 32 * 1024 * 1024
-    rows_per_buf = max(1, bufsize ÷ row_bytes)
-    buf = Vector{UInt8}(undef, rows_per_buf * row_bytes)
-    result = Vector{Vector{T}}(undef, nrows)
-
-    fd = ccall(:open, Cint, (Cstring, Cint), col.ctx.filepath, 0)
-    fd == -1 && error("Failed to open $(col.ctx.filepath)")
-    try
-        dest_idx = 1
-        rows_remaining = nrows
-        file_pos = Int64(col.ctx.data_start)
+        file_pos = Int64(ctx.data_start)
         while rows_remaining > 0
             rows_this = min(rows_per_buf, rows_remaining)
             nbytes = ccall(:pread, Cssize_t, (Cint, Ptr{UInt8}, Csize_t, Int64),
@@ -117,12 +85,8 @@ function Base.collect(col::MmapColumn{Vector{T}, T}) where {T<:Number}
             nbytes < rows_this * row_bytes && error("Short read")
             bp = pointer(buf)
             for r in 0:(rows_this - 1)
-                v = Vector{T}(undef, repeat)
-                pp = bp + r * row_bytes + col_offset
-                @inbounds for j in 1:repeat
-                    v[j] = ntoh(unsafe_load(Ptr{T}(pp + (j - 1) * sizeof(T))))
-                end
-                result[dest_idx] = v
+                row_ptr = bp + r * row_bytes
+                _extract_row!(dests, cols, row_ptr, dest_idx)
                 dest_idx += 1
             end
             file_pos += rows_this * row_bytes
@@ -131,7 +95,26 @@ function Base.collect(col::MmapColumn{Vector{T}, T}) where {T<:Number}
     finally
         ccall(:close, Cint, (Cint,), fd)
     end
-    return result
+    return dests
+end
+
+@inline function _extract_row!(dests, cols, row_ptr::Ptr{UInt8}, idx::Int)
+    map(dests, cols) do dest, col
+        _extract_one!(dest, col, row_ptr, idx)
+    end
+end
+
+@inline function _extract_one!(dest::Vector{T}, col::MmapColumn{T, T}, row_ptr::Ptr{UInt8}, idx::Int) where {T<:Number}
+    @inbounds dest[idx] = ntoh(unsafe_load(Ptr{T}(row_ptr + col.col_offset)))
+end
+
+@inline function _extract_one!(dest::Vector{Vector{T}}, col::MmapColumn{Vector{T}, T}, row_ptr::Ptr{UInt8}, idx::Int) where {T<:Number}
+    v = Vector{T}(undef, col.repeat)
+    pp = row_ptr + col.col_offset
+    @inbounds for j in 1:col.repeat
+        v[j] = ntoh(unsafe_load(Ptr{T}(pp + (j - 1) * sizeof(T))))
+    end
+    @inbounds dest[idx] = v
 end
 
 # --- Helpers ---
