@@ -30,6 +30,7 @@ export VLBI, table, uvtable
 include("fitsio/grouphdu.jl")
 include("fitsio/fitsutils.jl")
 include("fitsio/lazy_table.jl")
+include("fitsio/fast_column_read.jl")
 
 include("uvdata.jl")
 include("fitsimage.jl")
