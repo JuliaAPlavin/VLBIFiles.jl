@@ -1009,6 +1009,40 @@ end
     @test result.DATA == result_orig.DATA
 end
 
+@testitem "antenna catalog" begin
+    using LinearAlgebra
+
+    cat = VLBI.ngehtsim_antenna_catalog()
+    @test length(cat) == 113
+    @test all(a -> a isa Antenna, cat)
+    @test allunique(a.name for a in cat)
+
+    alma = only(filter(a -> a.name == :ALMA, cat))
+    @test alma.mount_type == VLBIData.AntennaMountType.AltAzimuth
+    @test alma.poltypes == (:X, :Y)
+    @test 6.3e6 < norm(alma.xyz) < 6.4e6
+
+    apex = only(filter(a -> a.name == :APEX, cat))
+    @test apex.mount_type == VLBIData.AntennaMountType.NaismithR
+    @test apex.poltypes == (:R, :L)
+
+    ali = only(filter(a -> a.name == :ALI, cat))
+    @test ali.mount_type == VLBIData.AntennaMountType.Unknown
+    @test ali.poltypes == (:U, :U)
+    @test 6.3e6 < norm(ali.xyz) < 6.4e6
+
+    # cross-check geodetic→ECEF against real ECEF from EHT UVFITS
+    cd(dirname(@__FILE__))
+    uv = VLBI.load(VLBI.UVData, "./data/SR1_3C279_2017_101_hi_hops_netcal_StokesI.uvfits")
+    fits_smt = only(filter(a -> a.name == :AZ, values(only(uv.ant_arrays).antennas)))
+    cat_smt = only(filter(a -> a.name == :SMT, cat))
+    @test norm(fits_smt.xyz - cat_smt.xyz) < 100  # meters
+
+    fits_jcmt = only(filter(a -> a.name == :JC, values(only(uv.ant_arrays).antennas)))
+    cat_jcmt = only(filter(a -> a.name == :JCMT, cat))
+    @test norm(fits_jcmt.xyz - cat_jcmt.xyz) < 100  # meters
+end
+
 @testitem "_" begin
     import Aqua
     Aqua.test_all(VLBIFiles; ambiguities=false, piracies=false)

@@ -37,6 +37,7 @@ include("fitsimage.jl")
 include("difmap_files.jl")
 include("alist.jl")
 include("loading.jl")
+include("ngehtsim_data.jl")
 
 baremodule VLBI
 using Reexport
@@ -48,7 +49,7 @@ Core.eval(VLBI, Expr(:export, _names...))
 
 @reexport import ..VLBIFiles:
     VLBIFiles,
-    load, save, guess_type,
+    load, save, guess_type, ngehtsim_antenna_catalog,
     table, read_data_raw, read_data_arrays,
     FitsImage, FrequencyWindow, UVHeader, AntArray, UVData, Alist,
     pixel_size, pixel_steps, pixel_area,
