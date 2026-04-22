@@ -1,13 +1,22 @@
 function lazycolumntable(hdu::TableHDU)
+    _ensure_hdu_active!(hdu)
     colnames = columnnames(hdu) |> Tuple
-    cols = map(colnames) do colname
-        TableHDUColumn(hdu, colname)
+    ctx = _mmap_table_context(hdu)
+
+    cols = if ctx !== nothing
+        map(colnames) do colname
+            colnum = fits_get_colnum(hdu.fitsfile, String(colname); case_sensitive=true)
+            col = _mmap_column(ctx, hdu, colnum)
+            col !== nothing ? col : TableHDUColumn(hdu, colname)
+        end
+    else
+        map(colname -> TableHDUColumn(hdu, colname), colnames)
     end
     tbl = NamedTuple{colnames}(cols)
 
     fhead = FITSIO.read_header(hdu)
-    @reset tbl.FLUX = mapview(colarray_postfunc(fhead, Val(:FLUX)), tbl.FLUX)
-    @reset tbl.WEIGHT = mapview(colarray_postfunc(fhead, Val(:WEIGHT)), tbl.WEIGHT)
+    haskey(tbl, :FLUX) && @reset tbl.FLUX = mapview(colarray_postfunc(fhead, Val(:FLUX)), tbl.FLUX)
+    haskey(tbl, :WEIGHT) && @reset tbl.WEIGHT = mapview(colarray_postfunc(fhead, Val(:WEIGHT)), tbl.WEIGHT)
 
     return tbl
 end

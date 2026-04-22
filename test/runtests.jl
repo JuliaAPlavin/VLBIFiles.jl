@@ -482,7 +482,7 @@ end
     @test length(raw) == 1000
     @test raw[1] isa NamedTuple
     @test raw.SOURCE[1] == 1
-    @test raw.SOURCE isa VLBIFiles.TableHDUColumn
+    @test raw.SOURCE isa VLBIFiles.MmapColumn
     @test named_axiskeys(raw.FLUX[1]) == (COMPLEX = [:re, :im], STOKES = [:RR, :LL, :RL, :LR], FREQ = 8.40595875e9:1.0e6:8.41295875e9, BAND = 1.0:1.0:4.0, RA = StepRangeLen(0.0, 0.0, 1), DEC = StepRangeLen(0.0, 0.0, 1))
     @test named_axiskeys(raw.WEIGHT[1]) == (STOKES = [:RR, :LL, :RL, :LR], BAND = 1.0:1.0:4.0)
 
@@ -518,7 +518,7 @@ end
         @test length(raw) == 1455779
         @test raw[12345] isa NamedTuple
         @test raw.SOURCE[1234] == 2
-        @test raw.SOURCE isa VLBIFiles.TableHDUColumn
+        @test raw.SOURCE isa VLBIFiles.MmapColumn
         @test named_axiskeys(raw.FLUX[1234]) == (COMPLEX = [:re, :im], STOKES = [:RR], FREQ = 2.220125e9:500000.0:2.251625e9, BAND = 1.0:1.0:16.0, RA = StepRangeLen(0.0, 0.0, 1), DEC = StepRangeLen(0.0, 0.0, 1))
         @test named_axiskeys(raw.WEIGHT[1234]) == (STOKES = [:RR], BAND = 1.0:1.0:16.0)
 
@@ -535,6 +535,99 @@ end
 
         @test uvf.header.date_obs == Date(2018, 8, 10)
     end
+end
+
+@testitem "mmap column read" begin
+    using VLBIFiles: FITSIO, FITSIO.Libcfitsio, MmapColumn, MmapTableContext
+    using StructArrays
+
+    p = joinpath(@__DIR__, "data", "BL146_1.fits")
+    isfile(p) || download("https://fits.gsfc.nasa.gov/registry/fitsidi/BL146_1.fits", p)
+
+    fits = FITSIO.FITS(p)
+    hdu = fits["UV_DATA"]
+    tbl = VLBIFiles.lazycolumntable(hdu)
+
+    # All scalar numeric columns should be MmapColumn
+    @test tbl.SOURCE isa MmapColumn{Int32}
+    @test tbl.BASELINE isa MmapColumn{Int32}
+    @test tbl.DATE isa MmapColumn{Float64}
+    @test tbl[Symbol("UU-L")] isa MmapColumn{Float32}
+    @test tbl.INTTIM isa MmapColumn{Float32}
+
+    # Array columns should also be MmapColumn
+    # (FLUX and WEIGHT are wrapped in MappedArray by lazycolumntable)
+    @test tbl.GATEID isa MmapColumn
+
+    # Single element access
+    @test tbl.SOURCE[1] == 1
+    @test tbl.SOURCE[end] isa Int32
+    @test tbl.BASELINE[1] isa Int32
+    @test tbl.DATE[1] isa Float64
+
+    # Collect scalar columns and verify against CFITSIO
+    Libcfitsio.fits_movabs_hdu(hdu.fitsfile, hdu.ext)
+    for colname in [:SOURCE, :BASELINE, :FREQID]
+        mmap_vals = collect(tbl[colname])
+        cfitsio_vals = Vector{Int32}(undef, length(tbl[colname]))
+        colnum = Libcfitsio.fits_get_colnum(hdu.fitsfile, String(colname))
+        Libcfitsio.fits_read_col(hdu.fitsfile, colnum, 1, 1, cfitsio_vals)
+        @test mmap_vals == cfitsio_vals
+    end
+    for colname in [Symbol("UU-L"), :INTTIM]
+        mmap_vals = collect(tbl[colname])
+        cfitsio_vals = Vector{Float32}(undef, length(tbl[colname]))
+        colnum = Libcfitsio.fits_get_colnum(hdu.fitsfile, String(colname))
+        Libcfitsio.fits_read_col(hdu.fitsfile, colnum, 1, 1, cfitsio_vals)
+        @test mmap_vals == cfitsio_vals
+    end
+    for colname in [:DATE, :TIME]
+        mmap_vals = collect(tbl[colname])
+        cfitsio_vals = Vector{Float64}(undef, length(tbl[colname]))
+        colnum = Libcfitsio.fits_get_colnum(hdu.fitsfile, String(colname))
+        Libcfitsio.fits_read_col(hdu.fitsfile, colnum, 1, 1, cfitsio_vals)
+        @test mmap_vals == cfitsio_vals
+    end
+
+    # FLUX and WEIGHT access (through MappedArray wrapper)
+    flux_val = tbl.FLUX[1]
+    @test flux_val isa AbstractArray{Float32}
+    @test size(flux_val) == (2, 4, 8, 4, 1, 1)
+
+    weight_val = tbl.WEIGHT[1]
+    @test weight_val isa AbstractArray{Float32}
+    @test size(weight_val) == (4, 4)
+
+    # GATEID (zero-repeat) returns empty vectors
+    @test tbl.GATEID[1] == Int32[]
+
+    # StructArray wrapping
+    sa = StructArray(tbl)
+    @test length(sa) == 1000
+    row = sa[1]
+    @test row isa NamedTuple
+    @test row.SOURCE == 1
+
+    close(fits)
+
+    # Test lazycolumntable on a table with string columns (ARRAY_GEOMETRY)
+    # String columns should fall back to TableHDUColumn
+    fits2 = FITSIO.FITS(p)
+    hdu_ag = fits2["ARRAY_GEOMETRY"]
+    tbl_ag = VLBIFiles.lazycolumntable(hdu_ag)
+
+    @test tbl_ag.ANNAME isa VLBIFiles.TableHDUColumn  # string -> fallback
+    @test tbl_ag.NOSTA isa MmapColumn{Int32}           # numeric -> mmap
+    @test tbl_ag.STABXYZ isa MmapColumn{<:Vector}      # numeric array -> mmap
+
+    annames = collect(tbl_ag.ANNAME)
+    @test annames == ["BR", "FD", "HN", "KP", "LA", "MK", "NL", "OV", "PT", "SC"]
+    @test tbl_ag.ANNAME[1] == "BR"
+    @test tbl_ag.ANNAME[end] == "SC"
+
+    @test collect(tbl_ag.NOSTA) == Int32[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+    close(fits2)
 end
 
 @testitem "uvf NAXIS=6 no IF axis (DDTSUVDATA)" begin
