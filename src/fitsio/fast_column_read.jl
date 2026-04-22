@@ -192,5 +192,8 @@ function _mmap_table_context(hdu::TableHDU)
     data = Mmap.mmap(io, Vector{UInt8})
     close(io)
 
+    # ccall(:madvise, Cint, (Ptr{UInt8}, Csize_t, Cint), pointer(data), length(data), 1)  # MADV_RANDOM=1
+    ccall(:madvise, Cint, (Ptr{UInt8}, Csize_t, Cint), pointer(data), length(data), 2) # MADV_SEQUENTIAL=2
+
     return MmapTableContext(filepath, data, addr.datastart, row_bytes, nrows)
 end
