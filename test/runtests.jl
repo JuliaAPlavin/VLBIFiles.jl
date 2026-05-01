@@ -317,6 +317,21 @@ end
     @test all(a -> a.feed_offsets == (0.0, 0.0), values(antarr.antennas))
 end
 
+@testitem "FITS-IDI ANTENNA HDU per-antenna polarization (BP276A)" begin
+    path = get(ENV, "VLBIFILES_TEST_BP276A",
+        "/Users/aplavin/work/galactic_scatter/2005+403/data/BP276/VLBA_BP276A_bp276aLband_BIN0_SRC0_0_260120T001116.idifits")
+    if !isfile(path)
+        @info "Skipping BP276A test, file not found: $path"
+    else
+        uv = VLBI.load(VLBI.UVData, path)
+        ants = only(uv.ant_arrays).antennas
+        # All 11 antennas: POLTYA="R", POLTYB="L" per AIPS Memo 114r
+        @test all(a -> a.poltypes == (:R, :L), ants)
+        # feed_offsets should be 0.0 rad (POLAA=POLAB=0.0 in this file)
+        @test all(a -> a.feed_offsets == (0.0, 0.0), ants)
+    end
+end
+
 @testitem "uvf antenna feed_offsets defaults" begin
     # Direct unit test: building Antenna from a NamedTuple lacking POLAA falls back to NaN
     using StaticArrays

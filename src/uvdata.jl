@@ -118,7 +118,12 @@ function VLBIData.Antenna(hdu_row::NamedTuple)
         @warn "Antennas with ORBPARM detected, be careful" hdu_row.ORBPARM hdu_row.ANNAME
     end
     poltypes = haskey(hdu_row, :POLTYA) ? Symbol.((hdu_row.POLTYA, hdu_row.POLTYB)) : (:UNK, :UNK)
-    feed_offsets = haskey(hdu_row, :POLAA) ? deg2rad.(Float64.((hdu_row.POLAA, hdu_row.POLAB))) : (NaN, NaN)
+    # POLAA/POLAB are E(nband) per FITS-IDI v3; AIPS AN may carry scalars.
+    # Use `first` to take the band-1 entry uniformly; multi-band ξ goes through
+    # the ANTENNA-HDU merge below (which has access to FREQID).
+    feed_offsets = haskey(hdu_row, :POLAA) ?
+        deg2rad.((Float64(first(hdu_row.POLAA)), Float64(first(hdu_row.POLAB)))) :
+        (NaN, NaN)
     Antenna(; name=Symbol(hdu_row.ANNAME), xyz=hdu_row.STABXYZ, mount_type=VLBIData.AntennaMountType.T(hdu_row.MNTSTA), poltypes, feed_offsets)
 end
 Base.@kwdef struct AntArray
@@ -374,6 +379,43 @@ function load(::Type{UVData}, path)
         end
         push!(ant_arrays, AntArray(hdu))
     end
+
+    # Per FITS-IDI v3 (AIPS Memo 114r), the global ANTENNA HDU carries per-antenna
+    # feed polarization (POLTYA/POLTYB) and feed-offset angles (POLAA/POLAB).
+    # ARRAY_GEOMETRY does not, so we merge here.
+    # POLAA/POLAB are E(nband) per FITS-IDI v3 — `read` materializes them as a
+    # Matrix(nband, n_ant); for AIPS-style scalars they are a Vector(n_ant).
+    # `selectdim(arr, ndims(arr), idx) |> first` gives the band-1 entry uniformly.
+    if haskey(fits, "ANTENNA")
+        at_hdu = fits["ANTENNA"]
+        at = (
+            ANNAME     = read(at_hdu, "ANNAME"),
+            ARRAY      = read(at_hdu, "ARRAY"),
+            ANTENNA_NO = read(at_hdu, "ANTENNA_NO"),
+            POLTYA     = read(at_hdu, "POLTYA"),
+            POLTYB     = read(at_hdu, "POLTYB"),
+            POLAA      = read(at_hdu, "POLAA"),
+            POLAB      = read(at_hdu, "POLAB"),
+        )
+        band1(arr, idx) = first(selectdim(arr, ndims(arr), idx))
+        for ai in eachindex(ant_arrays)
+            arr = ant_arrays[ai]
+            for (id, ant) in pairs(arr.antennas)
+                idx = findfirst(i -> at.ARRAY[i] == ai && at.ANTENNA_NO[i] == id,
+                                eachindex(at.ANNAME))
+                idx === nothing && continue
+                arr.antennas[id] = Antenna(;
+                    name         = ant.name,
+                    xyz          = ant.xyz,
+                    mount_type   = ant.mount_type,
+                    poltypes     = (Symbol(strip(at.POLTYA[idx])), Symbol(strip(at.POLTYB[idx]))),
+                    feed_offsets = deg2rad.((Float64(band1(at.POLAA, idx)),
+                                              Float64(band1(at.POLAB, idx)))),
+                )
+            end
+        end
+    end
+
     close(fits)
 
     UVData(; path, header, freq_windows, ant_arrays)
