@@ -1159,3 +1159,5 @@ end
     import CompatHelperLocal as CHL
     CHL.@check()
 end
+
+include("uvfits_mmap.jl")
