@@ -88,7 +88,6 @@ the first group's first parameter; `group_bytes` is the per-group stride in
 bytes (params + data).
 """
 struct MmapGroupContext
-    filepath::String
     data::Vector{UInt8}
     data_start::Int
     group_bytes::Int
@@ -110,6 +109,18 @@ function _mmap_groupedhdu_context(hdu::GroupedHDU)
     elem_size = abs(bitpix) ÷ 8
     @assert bitpix == -32 "Only BITPIX=-32 (Float32) random groups supported; got BITPIX=$bitpix"
 
+    # Data-array BSCALE/BZERO: the eager reader at Base.read(::GroupedHDU) reads
+    # via cfitsio's ffgpve which applies these automatically; our lazy reader
+    # returns raw on-disk values. Fail loud if non-trivial scaling is required
+    # rather than silently produce different values from the eager path. All
+    # known UVFITS visibility files use BSCALE=1, BZERO=0 (AIPS Memo 117 §3.1).
+    bscale = Float64(get(h, "BSCALE", 1.0))
+    bzero  = Float64(get(h, "BZERO",  0.0))
+    (bscale == 1.0 && bzero == 0.0) || throw(ArgumentError(
+        "Random-groups data BSCALE=$bscale, BZERO=$bzero — non-trivial scaling " *
+        "on the data array is not supported by lazycolumntable(::GroupedHDU). " *
+        "Fall back to the eager Base.read(hdu) path for this file."))
+
     pcount = h["PCOUNT"]
     ngroups = h["GCOUNT"]
     data_nelem = prod(Base.tail(sz))   # NAXIS2 × NAXIS3 × ... × NAXISm
@@ -121,7 +132,7 @@ function _mmap_groupedhdu_context(hdu::GroupedHDU)
     close(io)
     ccall(:madvise, Cint, (Ptr{UInt8}, Csize_t, Cint), pointer(data), length(data), 2)  # MADV_SEQUENTIAL
 
-    return MmapGroupContext(filepath, data, addr.datastart, group_bytes,
+    return MmapGroupContext(data, addr.datastart, group_bytes,
                             pcount, elem_size, Int(data_nelem), Int(ngroups))
 end
 
