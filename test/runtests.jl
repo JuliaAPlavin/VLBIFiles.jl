@@ -3,6 +3,27 @@ using TestItemRunner
 @run_package_tests
 
 
+@testitem "uvw_wavelengths" begin
+    using Unitful
+    # FITS-IDI seconds form: uvw[s] * freq[Hz] = wavelengths
+    @test VLBI.uvw_wavelengths(1.5e-6u"s", 8.4e9u"Hz") ≈ 12600.0
+    # Length form
+    @test VLBI.uvw_wavelengths(450.0u"m", 8.4u"GHz") ≈ Float64(450.0) * 8.4e9 / 299792458 atol=1e-6
+    # Both forms agree on the same physical baseline
+    uu_s = 1.5e-6u"s"
+    uu_m = uu_s * u"c" |> u"m"
+    @test VLBI.uvw_wavelengths(uu_s, 8.4u"GHz") ≈ VLBI.uvw_wavelengths(uu_m, 8.4u"GHz")
+    # Float32 bit-exactness: must equal the old inline form `uvw / (c / freq)`
+    # for any baseline+freq combination (used in real FITS-IDI processing)
+    for uvw_m in (1.0f3u"m", 1.234567f4u"m", 2.2424022f6u"m"), freq in (4.84474f9u"Hz", 8.4f9u"Hz")
+        old = ustrip(Unitful.NoUnits, uvw_m / (u"c" / freq))
+        @test VLBI.uvw_wavelengths(uvw_m, freq) === old
+    end
+    # Unit safety: bare numbers should be rejected
+    @test_throws MethodError VLBI.uvw_wavelengths(1.5, 8.4u"GHz")
+    @test_throws MethodError VLBI.uvw_wavelengths(1.5u"s", 8.4)
+end
+
 @testitem "generic loading" begin
     cd(dirname(@__FILE__))
     @test VLBI.guess_type("./data/map.fits") == VLBI.FitsImage

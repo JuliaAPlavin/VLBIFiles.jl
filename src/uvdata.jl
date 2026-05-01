@@ -1,3 +1,18 @@
+"""
+    uvw_wavelengths(uvw, freq) -> dimensionless wavelengths
+
+Convert a UVW coordinate to wavelengths at the given frequency.
+- `uvw::Unitful.Time` (FITS-IDI convention, light-travel time): returns `uvw * freq`.
+- `uvw::Unitful.Length` (e.g. meters): returns `uvw / (c / freq)`.
+
+Broadcast for vector quantities (e.g., a `UVW`).
+"""
+uvw_wavelengths(uvw::Unitful.Time,   freq::Unitful.Frequency) = NoUnits(uvw * freq)
+# Use uvw / (c/freq) rather than uvw*freq/c — keeps the intermediate at moderate
+# magnitude, avoiding Float32 precision loss for typical VLBI baselines.
+uvw_wavelengths(uvw::Unitful.Length, freq::Unitful.Frequency) = NoUnits(uvw / (u"c" / freq))
+
+
 Base.@kwdef struct FrequencyWindow
     freqid::Int
     ix::Int
