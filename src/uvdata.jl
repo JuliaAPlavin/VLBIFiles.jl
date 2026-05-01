@@ -132,7 +132,7 @@ Base.@kwdef struct AntArray
     array_xyz::SVector{3, Float64} = SVector(NaN, NaN, NaN)
 end
 
-strfloat_to_float(x::AbstractFloat) = x
+strfloat_to_float(x::Real) = x
 strfloat_to_float(x::String) = parse(Float64, replace(x, "D" => "E"))
 
 function AntArray(hdu::TableHDU)
