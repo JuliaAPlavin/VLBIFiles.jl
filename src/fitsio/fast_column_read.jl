@@ -15,6 +15,12 @@ struct MmapColumn{ET, T<:Number} <: AbstractVector{ET}
     repeat::Int
 end
 
+struct MmapArrayRow{T<:Number} <: AbstractVector{T}
+    ctx::MmapTableContext
+    pos::Int
+    repeat::Int
+end
+
 function _mmap_column(ctx::MmapTableContext, hdu::TableHDU, colnum::Integer)
     typecode, repeat, width = fits_get_coltype(hdu.fitsfile, colnum)
     col_offset = _compute_column_byte_offset(hdu.fitsfile, colnum)
@@ -23,11 +29,13 @@ function _mmap_column(ctx::MmapTableContext, hdu::TableHDU, colnum::Integer)
     if repeat == 1
         return MmapColumn{T, T}(ctx, col_offset, 1)
     else
-        return MmapColumn{Vector{T}, T}(ctx, col_offset, repeat)
+        return MmapColumn{MmapArrayRow{T}, T}(ctx, col_offset, repeat)
     end
 end
 
 Base.size(col::MmapColumn) = (col.ctx.nrows,)
+Base.size(row::MmapArrayRow) = (row.repeat,)
+Base.IndexStyle(::Type{<:MmapArrayRow}) = IndexLinear()
 
 # --- Scalar getindex ---
 
@@ -39,17 +47,15 @@ end
 
 # --- Array getindex ---
 
-function Base.getindex(col::MmapColumn{Vector{T}, T}, i::Int) where {T<:Number}
+@inline function Base.getindex(row::MmapArrayRow{T}, i::Int) where {T<:Number}
+    @boundscheck checkbounds(row, i)
+    GC.@preserve row ntoh(unsafe_load(Ptr{T}(pointer(row.ctx.data, row.pos + (i - 1) * sizeof(T)))))
+end
+
+@inline function Base.getindex(col::MmapColumn{MmapArrayRow{T}, T}, i::Int) where {T<:Number}
     @boundscheck checkbounds(col, i)
     pos = col.ctx.data_start + col.col_offset + (i - 1) * col.ctx.row_bytes + 1
-    result = Vector{T}(undef, col.repeat)
-    GC.@preserve col begin
-        p = pointer(col.ctx.data, pos)
-        @inbounds for j in 1:col.repeat
-            result[j] = ntoh(unsafe_load(Ptr{T}(p + (j - 1) * sizeof(T))))
-        end
-    end
-    return result
+    MmapArrayRow{T}(col.ctx, pos, col.repeat)
 end
 
 # --- Fast bulk collect via single-pass pread ---
@@ -65,7 +71,10 @@ function materialize_columns(cols::Union{Tuple, NamedTuple})
     _multi_collect(cols, first(cols).ctx)
 end
 
-function _multi_collect(cols, ctx::MmapTableContext, dests=map(similar, cols))
+_materialized_similar(col::MmapColumn{T, T}) where {T<:Number} = Vector{T}(undef, length(col))
+_materialized_similar(col::MmapColumn{MmapArrayRow{T}, T}) where {T<:Number} = Vector{Vector{T}}(undef, length(col))
+
+function _multi_collect(cols, ctx::MmapTableContext, dests=map(_materialized_similar, cols))
     nrows = ctx.nrows
     row_bytes = ctx.row_bytes
     bufsize = 32 * 1024 * 1024
@@ -104,17 +113,21 @@ end
     end
 end
 
-@inline function _extract_one!(dest::Vector{T}, col::MmapColumn{T, T}, row_ptr::Ptr{UInt8}, idx::Int) where {T<:Number}
+@inline function _extract_one!(dest::AbstractVector, col::MmapColumn{T, T}, row_ptr::Ptr{UInt8}, idx::Int) where {T<:Number}
     @inbounds dest[idx] = ntoh(unsafe_load(Ptr{T}(row_ptr + col.col_offset)))
 end
 
-@inline function _extract_one!(dest::Vector{Vector{T}}, col::MmapColumn{Vector{T}, T}, row_ptr::Ptr{UInt8}, idx::Int) where {T<:Number}
+@inline function _extract_one!(dest::AbstractVector{Vector{T}}, col::MmapColumn{MmapArrayRow{T}, T}, row_ptr::Ptr{UInt8}, idx::Int) where {T<:Number}
     v = Vector{T}(undef, col.repeat)
     pp = row_ptr + col.col_offset
     @inbounds for j in 1:col.repeat
         v[j] = ntoh(unsafe_load(Ptr{T}(pp + (j - 1) * sizeof(T))))
     end
     @inbounds dest[idx] = v
+end
+
+@inline function _extract_one!(dest::AbstractVector, col::MmapColumn{MmapArrayRow{T}, T}, row_ptr::Ptr{UInt8}, idx::Int) where {T<:Number}
+    @inbounds dest[idx] = col[idx]
 end
 
 # --- Helpers ---

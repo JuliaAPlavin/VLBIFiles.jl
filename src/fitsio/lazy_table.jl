@@ -28,7 +28,7 @@ end
 
 function colarray_postfunc(fhead::FITSHeader, ::Val{:WEIGHT})
     col_naxkeys = named_axiskeys_tablecol_fitsidi(fhead)[(:STOKES, :BAND)]
-    resf(x::Array) = KeyedArray(reshape(x, Tuple(map(length, col_naxkeys))); col_naxkeys...)
+    resf(x::AbstractArray) = KeyedArray(reshape(x, Tuple(map(length, col_naxkeys))); col_naxkeys...)
 	resf(x::Number) = x
 	return resf
 end

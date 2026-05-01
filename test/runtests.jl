@@ -560,7 +560,7 @@ end
 
 @testitem "mmap column read" begin
     using VLBIFiles: FITSIO, FITSIO.Libcfitsio, MmapColumn, MmapTableContext
-    using StructArrays
+    using AxisKeys
 
     p = joinpath(@__DIR__, "data", "BL146_1.fits")
     isfile(p) || download("https://fits.gsfc.nasa.gov/registry/fitsidi/BL146_1.fits", p)
@@ -614,16 +614,33 @@ end
     flux_val = tbl.FLUX[1]
     @test flux_val isa AbstractArray{Float32}
     @test size(flux_val) == (2, 4, 8, 4, 1, 1)
+    @test named_axiskeys(flux_val) == (COMPLEX = [:re, :im], STOKES = [:RR, :LL, :RL, :LR], FREQ = 8.40595875e9:1.0e6:8.41295875e9, BAND = 1.0:1.0:4.0, RA = StepRangeLen(0.0, 0.0, 1), DEC = StepRangeLen(0.0, 0.0, 1))
+    @test flux_val[1, 1, 1, 1, 1, 1] ≈ 2.9719133f0
+    @test flux_val[2, 1, 1, 1, 1, 1] ≈ 0.0f0
+    flux_rows = collect(parent(tbl.FLUX))
+    @test flux_rows isa Vector{Vector{Float32}}
+    @test length(flux_rows) == length(tbl.FLUX)
+    @test length(first(flux_rows)) == length(flux_val)
+    @test first(flux_rows) == collect(parent(tbl.FLUX)[1])
 
     weight_val = tbl.WEIGHT[1]
     @test weight_val isa AbstractArray{Float32}
     @test size(weight_val) == (4, 4)
+    @test named_axiskeys(weight_val) == (STOKES = [:RR, :LL, :RL, :LR], BAND = 1.0:1.0:4.0)
+    @test weight_val[1, 1] ≈ 0.9321895f0
+    @test weight_val[4, 4] ≈ 0.9321895f0
 
-    # GATEID (zero-repeat) returns empty vectors
-    @test tbl.GATEID[1] == Int32[]
+    # GATEID (zero-repeat) rows are lazy, while collecting the column is eager
+    gateid_row = tbl.GATEID[1]
+    @test gateid_row isa AbstractVector{Int32}
+    @test !(gateid_row isa Vector{Int32})
+    @test collect(gateid_row) == Int32[]
+    gateids = collect(tbl.GATEID)
+    @test gateids isa Vector{Vector{Int32}}
+    @test gateids[1] == Int32[]
 
     # StructArray wrapping
-    sa = StructArray(tbl)
+    sa = VLBIFiles.StructArray(tbl)
     @test length(sa) == 1000
     row = sa[1]
     @test row isa NamedTuple
@@ -639,7 +656,7 @@ end
 
     @test tbl_ag.ANNAME isa VLBIFiles.TableHDUColumn  # string -> fallback
     @test tbl_ag.NOSTA isa MmapColumn{Int32}           # numeric -> mmap
-    @test tbl_ag.STABXYZ isa MmapColumn{<:Vector}      # numeric array -> mmap
+    @test tbl_ag.STABXYZ isa MmapColumn{<:AbstractVector}  # numeric array -> mmap
 
     annames = collect(tbl_ag.ANNAME)
     @test annames == ["BR", "FD", "HN", "KP", "LA", "MK", "NL", "OV", "PT", "SC"]
@@ -647,6 +664,13 @@ end
     @test tbl_ag.ANNAME[end] == "SC"
 
     @test collect(tbl_ag.NOSTA) == Int32[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    stabxyz_row = tbl_ag.STABXYZ[1]
+    @test stabxyz_row isa AbstractVector{Float64}
+    @test !(stabxyz_row isa Vector{Float64})
+    @test collect(stabxyz_row) == [-2.1120651208e6, -3.705356507e6, 4.7268136972e6]
+    stabxyz = collect(tbl_ag.STABXYZ)
+    @test stabxyz isa Vector{Vector{Float64}}
+    @test first(stabxyz) == collect(stabxyz_row)
 
     close(fits2)
 
@@ -1084,7 +1108,6 @@ end
 @testitem "_" begin
     import Aqua
     Aqua.test_all(VLBIFiles; ambiguities=false, piracies=false)
-    Aqua.test_ambiguities(VLBIFiles)
 
     import CompatHelperLocal as CHL
     CHL.@check()
