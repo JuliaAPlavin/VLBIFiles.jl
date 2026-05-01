@@ -118,7 +118,8 @@ function VLBIData.Antenna(hdu_row::NamedTuple)
         @warn "Antennas with ORBPARM detected, be careful" hdu_row.ORBPARM hdu_row.ANNAME
     end
     poltypes = haskey(hdu_row, :POLTYA) ? Symbol.((hdu_row.POLTYA, hdu_row.POLTYB)) : (:UNK, :UNK)
-    Antenna(; name=Symbol(hdu_row.ANNAME), xyz=hdu_row.STABXYZ, mount_type=VLBIData.AntennaMountType.T(hdu_row.MNTSTA), poltypes)
+    feed_offsets = haskey(hdu_row, :POLAA) ? deg2rad.(Float64.((hdu_row.POLAA, hdu_row.POLAB))) : (NaN, NaN)
+    Antenna(; name=Symbol(hdu_row.ANNAME), xyz=hdu_row.STABXYZ, mount_type=VLBIData.AntennaMountType.T(hdu_row.MNTSTA), poltypes, feed_offsets)
 end
 Base.@kwdef struct AntArray
     name::String

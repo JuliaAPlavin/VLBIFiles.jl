@@ -310,6 +310,38 @@ end
     @test antenna_names(tbl[1]) == (:FD, :HN)
     @test tbl[1].stokes == :XR
     @test tbl[1].value ≈ (0.54561967f0 - 0.03217088f0im) ±ᵤ 0.03644394f0
+
+    # AIPS Memo 117 §4.1: POLAA/POLAB stored in degrees, exposed as Antenna.feed_offsets in radians.
+    # vis.fits has all-zero POLAA/POLAB, so feed_offsets are all (0.0, 0.0) — finite, not NaN.
+    @test antarr[2].feed_offsets == (0.0, 0.0)
+    @test all(a -> a.feed_offsets == (0.0, 0.0), values(antarr.antennas))
+end
+
+@testitem "uvf antenna feed_offsets defaults" begin
+    # Direct unit test: building Antenna from a NamedTuple lacking POLAA falls back to NaN
+    using StaticArrays
+    using VLBIFiles: Antenna
+    row = (
+        ANNAME = "X1",
+        STABXYZ = SVector(1.0, 2.0, 3.0),
+        MNTSTA = 0,
+        POLTYA = "R", POLTYB = "L",
+        # No POLAA / POLAB here
+    )
+    a = Antenna(row)
+    @test a.poltypes == (:R, :L)
+    @test all(isnan, a.feed_offsets)
+
+    # When POLAA/POLAB are present, conversion from degrees to radians is exact
+    row_with = (
+        ANNAME = "X2",
+        STABXYZ = SVector(1.0, 2.0, 3.0),
+        MNTSTA = 0,
+        POLTYA = "R", POLTYB = "L",
+        POLAA = 45.0, POLAB = 135.0,
+    )
+    a2 = Antenna(row_with)
+    @test a2.feed_offsets == (deg2rad(45.0), deg2rad(135.0))
 end
 
 @testitem "closures calculations" begin
