@@ -119,8 +119,7 @@ function VLBIData.Antenna(hdu_row::NamedTuple)
     end
     poltypes = haskey(hdu_row, :POLTYA) ? Symbol.((hdu_row.POLTYA, hdu_row.POLTYB)) : (:UNK, :UNK)
     # POLAA/POLAB are E(nband) per FITS-IDI v3; AIPS AN may carry scalars.
-    # Use `first` to take the band-1 entry uniformly; multi-band ξ goes through
-    # the ANTENNA-HDU merge below (which has access to FREQID).
+    # Use `first` to take the band-1 entry uniformly.
     feed_offsets = haskey(hdu_row, :POLAA) ?
         deg2rad.((Float64(first(hdu_row.POLAA)), Float64(first(hdu_row.POLAB)))) :
         (NaN, NaN)
@@ -383,34 +382,24 @@ function load(::Type{UVData}, path)
     # Per FITS-IDI v3 (AIPS Memo 114r), the global ANTENNA HDU carries per-antenna
     # feed polarization (POLTYA/POLTYB) and feed-offset angles (POLAA/POLAB).
     # ARRAY_GEOMETRY does not, so we merge here.
-    # POLAA/POLAB are E(nband) per FITS-IDI v3 — `read` materializes them as a
-    # Matrix(nband, n_ant); for AIPS-style scalars they are a Vector(n_ant).
-    # `selectdim(arr, ndims(arr), idx) |> first` gives the band-1 entry uniformly.
+    # POLAA/POLAB are E(nband) per FITS-IDI v3 (per-row vector of length nband);
+    # AIPS-style scalars come through as a plain number. `first` picks the band-1
+    # entry uniformly in either case.
     if haskey(fits, "ANTENNA")
-        at_hdu = fits["ANTENNA"]
-        at = (
-            ANNAME     = read(at_hdu, "ANNAME"),
-            ARRAY      = read(at_hdu, "ARRAY"),
-            ANTENNA_NO = read(at_hdu, "ANTENNA_NO"),
-            POLTYA     = read(at_hdu, "POLTYA"),
-            POLTYB     = read(at_hdu, "POLTYB"),
-            POLAA      = read(at_hdu, "POLAA"),
-            POLAB      = read(at_hdu, "POLAB"),
-        )
-        band1(arr, idx) = first(selectdim(arr, ndims(arr), idx))
+        at_rows = fits["ANTENNA"] |> columntable |> StructArray
         for ai in eachindex(ant_arrays)
             arr = ant_arrays[ai]
             for (id, ant) in pairs(arr.antennas)
-                idx = findfirst(i -> at.ARRAY[i] == ai && at.ANTENNA_NO[i] == id,
-                                eachindex(at.ANNAME))
+                idx = findfirst(r -> r.ARRAY == ai && r.ANTENNA_NO == id, at_rows)
                 idx === nothing && continue
+                r = at_rows[idx]
                 arr.antennas[id] = Antenna(;
                     name         = ant.name,
                     xyz          = ant.xyz,
                     mount_type   = ant.mount_type,
-                    poltypes     = (Symbol(strip(at.POLTYA[idx])), Symbol(strip(at.POLTYB[idx]))),
-                    feed_offsets = deg2rad.((Float64(band1(at.POLAA, idx)),
-                                              Float64(band1(at.POLAB, idx)))),
+                    poltypes     = (Symbol(strip(r.POLTYA)), Symbol(strip(r.POLTYB))),
+                    feed_offsets = deg2rad.((Float64(first(r.POLAA)),
+                                              Float64(first(r.POLAB)))),
                 )
             end
         end
