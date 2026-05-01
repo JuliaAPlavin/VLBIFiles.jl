@@ -1,18 +1,16 @@
-using Test
-using VLBIFiles
-using VLBIFiles: FITSIO
+@testitem "UVFITS lazy random-groups reader vs eager" begin
+    using VLBIFiles: FITSIO
 
-UVFITS_FIXTURES = [
-    "0332-391.uvfits",
-    "SR1_3C279_2017_101_hi_hops_netcal_StokesI.uvfits",
-    "hops_3600_OJ287_LO+HI.medcal_dcal_full.uvfits",
-    "datafile_01-01_230GHz.uvfits",
-    "mwa_1061316296.uvfits",
-    "paper_zen.uvfits",
-]
+    fixtures = [
+        "0332-391.uvfits",
+        "SR1_3C279_2017_101_hi_hops_netcal_StokesI.uvfits",
+        "hops_3600_OJ287_LO+HI.medcal_dcal_full.uvfits",
+        "datafile_01-01_230GHz.uvfits",
+        "mwa_1061316296.uvfits",
+        "paper_zen.uvfits",
+    ]
 
-@testset "UVFITS lazy random-groups reader vs eager" begin
-    for fname in UVFITS_FIXTURES
+    for fname in fixtures
         path = joinpath(pkgdir(VLBIFiles), "test", "data", fname)
         @testset "$fname" begin
             # Eager path (existing)
