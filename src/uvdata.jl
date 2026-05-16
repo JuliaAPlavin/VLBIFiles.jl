@@ -114,7 +114,7 @@ end
 
 strfloat_to_float(x::AbstractFloat) = x
 strfloat_to_float(x::String) = parse(Float64, replace(x, "D" => "E"))
-strfloat_to_float(x::Integer) = float(x)
+strfloat_to_float(x::Integer) = float(x) # sometime int
 
 function AntArray(hdu::TableHDU)
     header = read_header(hdu)
