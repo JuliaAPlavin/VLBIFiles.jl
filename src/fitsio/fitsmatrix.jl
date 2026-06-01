@@ -58,6 +58,12 @@ end
 Base.size(v::CoherencyView) = (v.n_chan,)
 Base.@propagate_inbounds Base.getindex(v::CoherencyView, k::Int) =
     map(i -> i == 0 ? v.absent : v.value(v.mat[i, k]), v.slot)
+# Specialized force-inlined iterate (`@propagate_inbounds` ⇒ `@inline`): the generic AbstractArray
+# iterate is cost-gated by the deep lazy getindex chain and won't inline into a loop, leaving the
+# loop-invariant pointer/stride setup un-hoisted (2-3× slower). This makes `zip` over the lazy
+# visibility/weight columns as fast as indexed access. See Fringy gridding (`fringe_grids`).
+Base.@propagate_inbounds Base.iterate(v::CoherencyView, c::Int=1) =
+    c > v.n_chan ? nothing : (@inbounds(v[c]), c + 1)
 # A missing complex visibility is NaN+NaNim (both parts, so isnan holds and nothing inspects a stray 0im).
 _absent(::Type{Complex{T}}) where T = Complex{T}(NaN, NaN)
 _absent(::Type{T}) where T = T(NaN)
