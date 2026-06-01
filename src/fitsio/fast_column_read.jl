@@ -142,6 +142,27 @@ end
 
 prefetch!(c::MappedArray, rows::AbstractUnitRange{<:Integer}) = prefetch!(parent(c), rows)
 
+# Prefetch the file region backing a column of per-row visibility/weight matrices (each a KeyedArray
+# over a FitsV/WMatrix whose `.block` reshapes one MmapArrayRow). `madvise(WILLNEED)` over the
+# [min,max] row byte-positions turns a scattered per-row read into one sequential readahead — only
+# worthwhile when that span fits in RAM, so callers prefetch a chunk (e.g. one scan) at a time.
+_backing_mmaprow(v) = parent(keyless_unname(keyless_unname(v).block))
+function prefetch!(col::AbstractVector{<:KeyedArray})
+    isempty(col) && return nothing
+    r = _backing_mmaprow(first(col))
+    r isa MmapArrayRow || return nothing      # column not mmap-backed ⇒ nothing to prefetch
+    ctx = r.ctx
+    lo = hi = r.pos
+    for v in col
+        p = _backing_mmaprow(v).pos
+        p < lo && (lo = p)
+        p > hi && (hi = p)
+    end
+    ccall(:madvise, Cint, (Ptr{UInt8}, Csize_t, Cint),
+          pointer(ctx.data, lo), (hi - lo) + ctx.row_bytes, Cint(3))   # MADV_WILLNEED
+    return nothing
+end
+
 # --- Helpers ---
 
 function _fits_get_hduaddr(fitsfile)
