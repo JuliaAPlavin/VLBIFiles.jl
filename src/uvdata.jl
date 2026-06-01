@@ -236,91 +236,6 @@ function uvw_keys(colnames)
 end
 
 
-function read_data_raw(uvdata::UVData, ::typeof(identity)=identity)
-    fits = FITS(uvdata)
-    if haskey(fits, "UV_DATA")
-        return fits["UV_DATA"] |> lazycolumntable |> StructArray
-    end
-    hdu = GroupedHDU(fits.fitsfile, 1)
-    read(hdu)
-end
-
-
-function read_data_arrays(uvdata::UVData, impl=identity)
-    raw = read_data_raw(uvdata, impl)
-
-    uvw_keys = @p begin
-        [(S"UU", S"VV", S"WW"), (S"UU--", S"VV--", S"WW--"), (S"UU---SIN", S"VV---SIN", S"WW---SIN")]
-        filteronly(_ ⊆ keys(raw))
-    end
-
-    data_arr = raw[:DATA]
-    # When IF axis is absent (NAXIS=6), insert singleton IF dimension
-    if ndims(data_arr) == 6  # COMPLEX, STOKES, FREQ, RA, DEC, groups
-        sz = size(data_arr)
-        data_arr = reshape(data_arr, sz[1], sz[2], sz[3], 1, sz[4], sz[5], sz[6])
-    end
-    count = size(data_arr)[end]
-    n_if = length(uvdata.freq_windows)
-    n_chan = map(fw -> fw.nchan, uvdata.freq_windows) |> unique |> only
-    axarr = KeyedArray(data_arr,
-        COMPLEX=[:re, :im, :wt],
-        STOKES=uvdata.header.stokes,
-        FREQ=1:n_chan,
-        IF=1:n_if,
-        RA=[1], DEC=[1],
-        _=1:count,
-    )
-    # drop always-singleton axes
-    axarr = axarr[DEC=1, RA=1]
-
-    uvw_m = UVW.([Float32.(raw[k]) .* (u"c" * u"s") .|> u"m" for k in uvw_keys]...)
-    baseline = map(b -> Baseline_from_fits(b, uvdata.ant_arrays), raw[:BASELINE])
-    data = (;
-        uvw_m,
-        baseline,
-        datetime = julian_day.(Float64.(raw[:DATE]) .+ (haskey(raw, :_DATE) ? raw[:_DATE] : 0)),
-        visibility = complex.(axarr(COMPLEX=:re), axarr(COMPLEX=:im)),
-        weight = axarr(COMPLEX=:wt),
-    )
-    if haskey(raw, :INTTIM)
-        data = merge(data, (int_time = raw[:INTTIM] .* u"s",))
-    end
-    return data
-end
-
-function _table(uvdata::UVData; impl)
-    data = read_data_arrays(uvdata, impl)
-    @assert ndims(data.visibility) == 4
-
-    poltypes = @p uvdata.ant_arrays flatmap(_.antennas) map(_.poltypes) unique
-    # XXX: will also trigger if poltypes of all antennas changed to a different (but same) value:
-    stokes_asis = length(poltypes) == 1
-    
-    @p begin
-        data.visibility
-        # `|> columntable |> rowtable` is faster than `|> rowtable` alone
-        map(__ |> columntable |> rowtable) do r
-            ix = r._
-            freq_spec = uvdata.freq_windows[r.IF]
-            uvw_m = data.uvw_m[ix]
-            uvw_wl = UVW(ustrip.(Unitful.NoUnits, uvw_m ./ (u"c" / frequency(freq_spec, :average))))
-            (;
-                baseline=data.baseline[ix],
-                datetime=data.datetime[ix],
-                stokes=stokes_asis ? r.STOKES : to_proper_stokes(r.STOKES, uvdata.ant_arrays, data.baseline[ix]),
-                freq_spec,
-                uv_m=UV(uvw_m), w_m=uvw_m.w,
-                uv=UV(uvw_wl), w=uvw_wl.w,
-                visibility=r.value,
-            )
-        end
-        StructArray()
-        @insert __.weight = collect(vec(data.weight))
-        filter!(_.weight > 0)
-    end
-end
-
 function to_proper_stokes(stokes::Symbol, ant_arrays, bl::Baseline{Symbol})
     length(ant_arrays) == 1 || error("Modify poltypes in multi-array UVData is not supported")
     ant_array = only(ant_arrays)
@@ -336,11 +251,34 @@ function to_proper_stokes(stokes::Symbol, ant_arrays, bl::Baseline{Symbol})
 end
 
 
-uvtable(uvd::UVData; impl=identity) = @p uvd _table(;impl) map((;
-    _.datetime, _.stokes, _.freq_spec,
-    spec=VisSpec(_.baseline, UV(_.uv)),
-    value=U.Value(_.visibility, 1/√_.weight),
-))
+function uvtable(uv::UVData)
+    wt = uvtable_wide(uv)
+    stk = uv.header.stokes
+    nch = uniqueonly(fw.nchan for fw in uv.freq_windows)
+    # stokes_asis: when every antenna shares the same feeds, the file's stokes labels already match the
+    # data, so skip the per-baseline feed translation; uniform-feed files (including linear/Stokes) use
+    # their raw labels, and only mixed-feed arrays are translated.
+    stokes_asis = length(@p uv.ant_arrays flatmap(_.antennas) map(_.poltypes) unique) == 1
+    properstokes(s, bl) = stokes_asis ? s : to_proper_stokes(s, uv.ant_arrays, bl)
+    @p begin
+        wt
+        flatmap() do r
+            # one row per surviving (stokes, channel); `product` varies its first argument fastest, so the
+            # order is IF → channel-within-IF → stokes-innermost. weight ≤ 0 is dropped; k and w computed once.
+            @p Iterators.product(eachindex(stk), 1:nch, enumerate(uv.freq_windows)) filtermap() do (s, chan, (iif, fw))
+                k = chan + nch*(iif - 1)
+                w = r.weight[s, k]
+                w > 0 || return nothing
+                (; r.datetime,
+                   stokes = properstokes(stk[s], r.baseline),
+                   freq_spec = fw,
+                   spec = VisSpec(r.baseline, UV(UVW(uvw_wavelengths.(r.uvw, frequency(fw, :average))...))),
+                   value = U.Value(r.visibility[s, k], 1/√w))
+            end
+        end
+        StructArray()
+    end
+end
 
 
 function uvtable_wide(uv::UVData)
@@ -428,7 +366,9 @@ function _widetable_uvfits(uv, fits)
     meta = materialize_columns(delete(cols, @o _.DATA))
     baseline  = map(b -> Baseline_from_fits(b, uv.ant_arrays), meta.BASELINE)
     date2     = haskey(meta, :_DATE) ? meta._DATE : 0
-    datetime  = julian_day.(meta.DATE .+ date2)
+    # the two-word JD (DATE integer part + _DATE fraction) must be summed in Float64: both words
+    # are Float32 on disk, but their sum (~2.45e6 days) has no Float32 representation.
+    datetime  = julian_day.(Float64.(meta.DATE) .+ date2)
     uvw       = _decode_uvw(meta, Float32)  # UVFITS random-group UU/VV/WW are Float32 on disk; a non-trivial PSCAL only promoted the materialized column to Float64
     source_id = fill(1, length(baseline))
     frq = frequencies(uv.freq_windows)

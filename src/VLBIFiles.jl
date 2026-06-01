@@ -56,7 +56,7 @@ Core.eval(VLBI, Expr(:export, _names...))
 @reexport import ..VLBIFiles:
     VLBIFiles,
     load, save, guess_type, ngehtsim_antenna_catalog,
-    table, read_data_raw, read_data_arrays, uvw_wavelengths,
+    table, uvw_wavelengths,
     FitsImage, FrequencyWindow, UVHeader, AntArray, UVData, Alist,
     pixel_size, pixel_steps, pixel_area,
     image_stored, image_clean, image_residual, image_clean_with_residual

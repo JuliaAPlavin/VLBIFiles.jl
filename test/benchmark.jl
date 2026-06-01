@@ -68,10 +68,10 @@ end
 p = bench_path()
 uvf = VLBI.load(VLBI.UVData, p)
 
-t = @elapsed raw = VLBI.read_data_raw(uvf)
+t = @elapsed raw = VLBIFiles.lazycolumntable(VLBIFiles.FITS(uvf.path)["UV_DATA"]) |> VLBIFiles.StructArray
 nrows = length(raw)
 println("file: $p")
-println("read_data_raw: $(round(t, digits=2))s  ($nrows rows)")
+println("lazycolumntable: $(round(t, digits=2))s  ($nrows rows)")
 
 n = parse(Int, get(ENV, "VLBIFILES_BENCHMARK_N", "10000"))
 samples = parse(Int, get(ENV, "VLBIFILES_BENCHMARK_SAMPLES", "7"))

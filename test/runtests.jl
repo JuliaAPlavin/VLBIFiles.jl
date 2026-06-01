@@ -253,7 +253,6 @@ end
 @testitem "uvf simple" begin
     using Unitful, UnitfulAstro, UnitfulAngles
     using Dates
-    using PythonCall
     using VLBIFiles.Uncertain
     using Statistics
     using StaticArrays
@@ -293,9 +292,6 @@ end
     @test VLBI.Baseline(tbl[12345]) == VLBI.Baseline((:FD, :PT))
     @test UV(tbl[12345]) == UV(4.28155f6, -2.8311578f7)
     @test VLBI.visibility(tbl[12345]) == (0.48758677f0 - 0.09014242f0im) ±ᵤ 0.040410895f0
-
-    @test first(tbl_raw) == first(uvtable(uv; impl=pyimport))
-    @test tbl_raw == uvtable(uv; impl=pyimport)
 end
 
 @testitem "uvf antenna polarization" begin
@@ -444,7 +440,6 @@ end
 @testitem "uvf multichannel" begin
     using Unitful, UnitfulAstro, UnitfulAngles
     using Dates
-    using PythonCall
     using VLBIFiles.Uncertain
     using Statistics
     using StaticArrays
@@ -465,13 +460,11 @@ end
     res = filter(r -> VLBI.Baseline(r) == VLBI.Baseline((:HN, :LA)) && r.datetime == target.datetime && r.freq_spec == target.freq_spec && r.stokes == target.stokes, df)[1]
     @test res == target
     @test map(typeof, res) == map(typeof, target)
-    @test df == uvtable(uv; impl=pyimport)
 end
 
 @testitem "uvf EHT 1" begin
     using Unitful, UnitfulAstro, UnitfulAngles
     using Dates
-    using PythonCall
     using VLBIFiles.Uncertain
     using Statistics
     using StaticArrays
@@ -492,7 +485,6 @@ end
     res = filter(r -> VLBI.Baseline(r) == VLBI.Baseline((:AP, :AZ)) && r.datetime == target.datetime && r.freq_spec == target.freq_spec && r.stokes == target.stokes, df)[1]
     @test res == target
     @test map(typeof, res) == map(typeof, target)
-    @test df == uvtable(uv; impl=pyimport)
 
     @test ICRSCoords(uv) ≈ ICRSCoords(133.703645547231|>deg2rad, 20.10851132763757|>deg2rad)
 end
@@ -500,7 +492,6 @@ end
 @testitem "uvf EHT 2" begin
     using Unitful, UnitfulAstro, UnitfulAngles
     using Dates
-    using PythonCall
     using VLBIFiles.Uncertain
     using Statistics
     using StaticArrays
@@ -521,7 +512,6 @@ end
     res = filter(r -> VLBI.Baseline(r) == VLBI.Baseline((:AA, :AP)) && r.datetime == target.datetime && r.freq_spec == target.freq_spec && r.stokes == target.stokes, df)[1]
     @test res == target
     @test map(typeof, res) == map(typeof, target)
-    @test df == uvtable(uv; impl=pyimport)
 
     @test ICRSCoords(uv) ≈ ICRSCoords(194.0465273618698|>deg2rad, -5.789312447441949|>deg2rad)
 end
@@ -529,7 +519,6 @@ end
 @testitem "uvf EHT 3" begin
     using Unitful, UnitfulAstro, UnitfulAngles
     using Dates
-    using PythonCall
     using Statistics
     using StaticArrays
     using Tables
@@ -540,9 +529,20 @@ end
     @test length(uv.freq_windows) == 1
     df = uvtable(uv)
     @test VLBI.visibility(df[1]) ≈ -0.0061733737f0 + 0.052109245f0im
-    @test df == uvtable(uv; impl=pyimport)
 
     @test ICRSCoords(uv) ≈ ICRSCoords(187.70595|>deg2rad, 12.39112|>deg2rad)
+end
+
+@testitem "uvtable fitsidi" begin
+    using AxisKeys
+    cd(dirname(@__FILE__))
+    uv = VLBI.load(VLBI.UVData, "./data/BL146_1.fits")
+    t = uvtable(uv)
+    @test length(t) == 128000               # 1000 records × 32 channels × 4 stokes, all weights > 0
+    @test isconcretetype(eltype(t))
+    @test propertynames(t) ⊇ (:datetime, :stokes, :freq_spec, :spec, :value)
+    wt = VLBIFiles.uvtable_wide(uv)
+    @test wt.visibility[2](stokes=:RR, freq=axiskeys(wt.visibility[2],:freq)[1]) ≈ ComplexF32(-0.00033012778, -0.0009707548)
 end
 
 @testitem "sources" begin
@@ -572,9 +572,8 @@ end
 
     @test length(uvf.freq_windows) == 4
 
-    raw = VLBI.read_data_raw(uvf)
-    @test length(raw) == 1000
-    @test raw[1] isa NamedTuple
+    raw = VLBIFiles.lazycolumntable(FITSIO.FITS(uvf.path)["UV_DATA"])
+    @test length(raw.SOURCE) == 1000
     @test raw.SOURCE[1] == 1
     @test raw.SOURCE isa VLBIFiles.MmapColumn
     @test named_axiskeys(raw.FLUX[1]) == (COMPLEX = [:re, :im], STOKES = [:RR, :LL, :RL, :LR], FREQ = 8.40595875e9:1.0e6:8.41295875e9, BAND = 1.0:1.0:4.0, RA = StepRangeLen(0.0, 0.0, 1), DEC = StepRangeLen(0.0, 0.0, 1))
@@ -608,9 +607,8 @@ end
 
         @test length(uvf.freq_windows) == 16
 
-        raw = VLBI.read_data_raw(uvf)
-        @test length(raw) == 1455779
-        @test raw[12345] isa NamedTuple
+        raw = VLBIFiles.lazycolumntable(FITSIO.FITS(uvf.path)["UV_DATA"])
+        @test length(raw.SOURCE) == 1455779
         @test raw.SOURCE[1234] == 2
         @test raw.SOURCE isa VLBIFiles.MmapColumn
         @test named_axiskeys(raw.FLUX[1234]) == (COMPLEX = [:re, :im], STOKES = [:RR], FREQ = 2.220125e9:500000.0:2.251625e9, BAND = 1.0:1.0:16.0, RA = StepRangeLen(0.0, 0.0, 1), DEC = StepRangeLen(0.0, 0.0, 1))
@@ -780,8 +778,7 @@ end
     @test length(uv.ant_arrays) == 1
     @test length(only(uv.ant_arrays).antennas) == 28
 
-    raw = VLBI.read_data_raw(uv)
-    @test size(raw[:DATA])[end] == 7956
+    @test length(VLBIFiles.uvtable_wide(uv)) == 7956
 
     tbl = uvtable(uv)
     @test length(tbl) > 0
@@ -803,8 +800,7 @@ end
     @test length(uv.ant_arrays) == 1
     @test length(only(uv.ant_arrays).antennas) == 6
 
-    raw = VLBI.read_data_raw(uv)
-    @test size(raw[:DATA])[end] == 22675
+    @test length(VLBIFiles.uvtable_wide(uv)) == 22675
 
     tbl = uvtable(uv)
     @test length(tbl) > 0
@@ -824,8 +820,7 @@ end
     @test length(uv.freq_windows) == 1
     @test length(uv.ant_arrays) == 1
 
-    raw = VLBI.read_data_raw(uv)
-    @test size(raw[:DATA])[end] == 16256
+    @test length(VLBIFiles.uvtable_wide(uv)) == 16256
 
     tbl = uvtable(uv)
     # All data in this file is flagged (weight=-0.0), so table is empty after filtering
@@ -847,8 +842,7 @@ end
     @test uv.freq_windows[1].nchan == 11
     @test length(uv.ant_arrays) == 1
 
-    raw = VLBI.read_data_raw(uv)
-    @test size(raw[:DATA])[end] == 285
+    @test length(VLBIFiles.uvtable_wide(uv)) == 285
 
     tbl = uvtable(uv)
     @test length(tbl) > 0
@@ -1030,10 +1024,9 @@ end
     @test length(uv.ant_arrays[3].antennas) == 10
 
     # Reading data should produce no "Antenna index out of bounds" warnings
-    data = @test_nowarn VLBI.read_data_arrays(uv)
+    bls = (@test_nowarn VLBIFiles.uvtable_wide(uv)).baseline
 
     # Baselines from array 2 (has antenna 9 = SC) should resolve correctly
-    bls = data[:baseline]
     all_names = Set{Symbol}()
     for b in bls
         push!(all_names, b.antennas...)
