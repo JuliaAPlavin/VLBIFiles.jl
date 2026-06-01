@@ -1174,6 +1174,27 @@ end
     @test allocs(c, 2, 3, 100) == 0
 end
 
+@testitem "weight matrices" begin
+    function allocs(m, i, j, n)
+        a = 0
+        for _ in 1:n
+            a += @allocated m[i, j]
+        end
+        a
+    end
+    nc, ns, nch, nIF = 3, 2, 2, 2; ntot = nch*nIF
+    blk = Float32.(1:nc*ns*ntot)
+    we = VLBIFiles.FitsWMatrixEmb(blk, nc, ns, ntot)
+    @test size(we) == (ns, ntot)
+    @test we[1,1] == blk[3]                    # weight = 3rd COMPLEX entry of (stokes 1, channel 1)
+    @test we[2,1] == blk[nc+3]
+    wblk = Float32.(1:ns*nIF)
+    ws = VLBIFiles.FitsWMatrixSep(wblk, ns, nch, ntot)
+    @test ws[1,1] == wblk[1]                    # band 1, stokes 1
+    @test ws[1,nch+1] == wblk[ns+1]             # band 2, stokes 1 (broadcast across the band's channels)
+    @test allocs(we, 2, 2, 100) == 0 && allocs(ws, 2, 2, 100) == 0
+end
+
 @testitem "_" begin
     import Aqua
     Aqua.test_all(VLBIFiles; ambiguities=false, piracies=false)
