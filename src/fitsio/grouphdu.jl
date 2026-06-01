@@ -196,27 +196,19 @@ end
 Base.size(c::MmapGroupColumn) = (c.ctx.ngroups,)
 Base.IndexStyle(::Type{<:MmapGroupColumn}) = IndexLinear()
 
-# Pick the smallest lossless output type for a scalar PTYPE column.
-_column_eltype(pscal::Float64, pzero::Float64) =
-    (pscal == 1.0 && pzero == 0.0) ? Float32 : Float64
+# Output type for a scalar PTYPE column. Only a non-zero PZERO offset (canonical case: DATE,
+# PZERO ≈ 2.45e6) needs Float64 headroom; a pure PSCAL rescale of a Float32 sample (UU/VV/WW)
+# carries no precision beyond Float32, so it stays Float32 — its honest on-disk precision.
+_column_eltype(pscal::Float64, pzero::Float64) = pzero == 0.0 ? Float32 : Float64
 
-# Scalar, no scaling: bit-exact return of the on-disk Float32.
-@inline function Base.getindex(c::MmapGroupColumn{Float32}, g::Int)
-    @boundscheck checkbounds(c, g)
-    ctx = c.ctx
-    pos = ctx.data_start + (g - 1) * ctx.group_bytes + c.byte_offset_in_group + 1
-    GC.@preserve ctx ntoh(unsafe_load(Ptr{Float32}(pointer(ctx.data, pos))))
-end
-
-# Scalar, with scaling: muladd promotes Float32 raw to Float64 automatically;
-# returning Float64 preserves precision when PZERO has more than ~24 bits of
-# significand (canonical case: DATE).
-@inline function Base.getindex(c::MmapGroupColumn{Float64}, g::Int)
+# Scalar getindex: read the on-disk Float32, apply PSCAL/PZERO (muladd promotes to Float64), and
+# round to the column's output type. Trivial scaling stays bit-exact (Float32(muladd(raw,1,0)) == raw).
+@inline function Base.getindex(c::MmapGroupColumn{ET}, g::Int) where {ET<:AbstractFloat}
     @boundscheck checkbounds(c, g)
     ctx = c.ctx
     pos = ctx.data_start + (g - 1) * ctx.group_bytes + c.byte_offset_in_group + 1
     raw = GC.@preserve ctx ntoh(unsafe_load(Ptr{Float32}(pointer(ctx.data, pos))))
-    return muladd(raw, c.pscal, c.pzero)
+    return ET(muladd(raw, c.pscal, c.pzero))
 end
 
 # Array: return a per-group row view.

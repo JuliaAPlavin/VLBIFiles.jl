@@ -29,15 +29,13 @@
             # reorder bugs.
             @test keys(eager) == keys(lazy)
 
-            # Each parameter column: same length, same values element-wise.
-            # `isequal` on two AbstractVectors compares pairwise without
-            # requiring the same eltype — eager is Vector{Float64}, lazy may
-            # be MmapGroupColumn{Float32} or {Float64} depending on PSCAL/PZERO.
-            # For the no-scaling case, Float64(Float32_raw) == Float32_raw is
-            # bit-exact, so the cross-type comparison still succeeds.
+            # Each parameter column: same length, same values element-wise. Eager is always
+            # Vector{Float64}; lazy is the honest on-disk precision — Float32 for a pure-rescale
+            # column (UU/VV/WW: PZERO=0), Float64 only when PZERO needs the headroom (DATE). So
+            # compare eager rounded to the lazy column's precision.
             for k in keys(eager)
                 k === :DATA && continue
-                @test isequal(eager[k], lazy[k])
+                @test isequal(eltype(lazy[k]).(eager[k]), lazy[k])
             end
 
             # DATA: eager is `Array{Float32, 7}` with groups along the last axis;

@@ -305,9 +305,7 @@ function _sources_fitsidi(fits)
 end
 
 # shared per-row helpers; `cols` is a column table (lazy or materialized).
-# `T` is the on-disk storage float type of the UVW columns; components are cast to it
-# before the unit chain so the result carries no precision beyond what the file holds.
-_decode_uvw(cols, T)       = (k = uvw_keys(keys(cols)); map((u,v,w) -> SVector{3,T}(u,v,w) .* u"s" .* u"c" .|> u"m",
+_decode_uvw(cols)          = (k = uvw_keys(keys(cols)); map((u,v,w) -> SVector(u,v,w) .* u"s" .* u"c" .|> u"m",
                                                             cols[k[1]], cols[k[2]], cols[k[3]]))
 _layout(uv)               = (length(uv.header.stokes),                        # n_stokes
                              uniqueonly(fw.nchan for fw in uv.freq_windows),   # nchan_per_IF
@@ -341,7 +339,7 @@ function _widetable_fitsidi(uv, fits)
     meta = materialize_columns(delete(cols, @o _.FLUX _.WEIGHT))
     baseline  = map(b -> Baseline_from_fits(b, uv.ant_arrays), meta.BASELINE)
     datetime  = julian_day.(meta.DATE .+ meta.TIME)
-    uvw       = _decode_uvw(meta, eltype(meta[uvw_keys(keys(meta))[1]]))  # FITS-IDI UVW columns keep their native stored type
+    uvw       = _decode_uvw(meta)
     source_id = Int.(meta.SOURCE)
     frq = frequencies(uv.freq_windows)                      # authoritative per-channel freq; stokes reused from each cell
     # L1: each cell is a `mapview` transform of the L0 N-D array — no `parent`, the lazy column is `mapview` itself
@@ -369,7 +367,7 @@ function _widetable_uvfits(uv, fits)
     # the two-word JD (DATE integer part + _DATE fraction) must be summed in Float64: both words
     # are Float32 on disk, but their sum (~2.45e6 days) has no Float32 representation.
     datetime  = julian_day.(Float64.(meta.DATE) .+ date2)
-    uvw       = _decode_uvw(meta, Float32)  # UVFITS random-group UU/VV/WW are Float32 on disk; a non-trivial PSCAL only promoted the materialized column to Float64
+    uvw       = _decode_uvw(meta)
     source_id = fill(1, length(baseline))
     frq = frequencies(uv.freq_windows)
     visibility = mapview(nd -> _viscell(nd, n_complex, n_stokes, n_total, frq), cols.DATA)
