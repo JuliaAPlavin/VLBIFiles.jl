@@ -130,6 +130,18 @@ end
     @inbounds dest[idx] = col[idx]
 end
 
+# --- Prefetch (madvise WILLNEED) ---
+
+function prefetch!(c::MmapColumn, rows::AbstractUnitRange{<:Integer})
+    ctx = c.ctx
+    start = ctx.data_start + (first(rows) - 1) * ctx.row_bytes
+    ccall(:madvise, Cint, (Ptr{UInt8}, Csize_t, Cint),
+          pointer(ctx.data, start + 1), length(rows) * ctx.row_bytes, Cint(3))   # MADV_WILLNEED = 3
+    return nothing
+end
+
+prefetch!(c::MappedArray, rows::AbstractUnitRange{<:Integer}) = prefetch!(parent(c), rows)
+
 # --- Helpers ---
 
 function _fits_get_hduaddr(fitsfile)

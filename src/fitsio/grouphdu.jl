@@ -265,3 +265,11 @@ function lazycolumntable(hdu::GroupedHDU)
 end
 
 materialize_columns(cols::NamedTuple{N, <:Tuple{Vararg{MmapGroupColumn}}}) where {N} = map(collect, cols)
+
+function prefetch!(c::MmapGroupColumn, rows::AbstractUnitRange{<:Integer})
+    ctx = c.ctx
+    start = ctx.data_start + (first(rows) - 1) * ctx.group_bytes
+    ccall(:madvise, Cint, (Ptr{UInt8}, Csize_t, Cint),
+          pointer(ctx.data, start + 1), length(rows) * ctx.group_bytes, Cint(3))   # MADV_WILLNEED = 3
+    return nothing
+end

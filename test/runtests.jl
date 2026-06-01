@@ -1247,6 +1247,22 @@ end
     end
 end
 
+@testitem "prefetch!" begin
+    cd(dirname(@__FILE__))
+    # FITS-IDI: MmapColumn (table) + a mapview-wrapped column (FLUX)
+    uvi = VLBI.load(VLBI.UVData, "./data/BL146_1.fits")
+    coli = VLBIFiles.lazycolumntable(VLBIFiles.FITS(uvi.path)["UV_DATA"])
+    @test VLBIFiles.prefetch!(coli.BASELINE, 1:10) === nothing          # MmapColumn leaf
+    @test VLBIFiles.prefetch!(coli.FLUX, 1:10) === nothing              # mapview over MmapColumn → recursive unwrap
+    @test VLBIFiles.prefetch!(VLBIFiles.uvtable_wide(uvi).visibility, 1:10) === nothing  # L1 mapview chain
+    # UVFITS: MmapGroupColumn + DATA mapview
+    uv = VLBI.load(VLBI.UVData, "./data/vis.fits")
+    colu = VLBIFiles.lazycolumntable(VLBIFiles.GroupedHDU(VLBIFiles.FITS(uv.path).fitsfile, 1))
+    @test VLBIFiles.prefetch!(colu.BASELINE, 1:10) === nothing          # MmapGroupColumn leaf
+    @test VLBIFiles.prefetch!(colu.DATA, 1:10) === nothing              # mapview over MmapGroupColumn
+    @test VLBIFiles.prefetch!(VLBIFiles.uvtable_wide(uv).visibility, 1:10) === nothing
+end
+
 @testitem "_" begin
     import Aqua
     Aqua.test_all(VLBIFiles; ambiguities=false, piracies=false)
