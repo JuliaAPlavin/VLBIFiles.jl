@@ -179,7 +179,7 @@ function VLBIData.Baseline(array_ix::Integer, ant_ids::NTuple{2, Integer}, ant_a
         if !isnothing(ant)
             ant.name
         else
-            @warn "Antenna index out of bounds, assigning generated name" length(ants) ant_ids
+            @warn "Antenna index out of bounds, assigning generated name" length(ants) ant_ids maxlog=1
             Symbol(:ANT, id)
         end
     end

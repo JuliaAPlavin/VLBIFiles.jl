@@ -1281,6 +1281,18 @@ end
     @test (@allocated bench_col(V)) == 0
 end
 
+@testitem "faithful warnings" begin
+    using Logging
+    cd(dirname(@__FILE__))
+    uv = VLBI.load(VLBI.UVData, "./data/paper_zen.uvfits")
+    logger = Test.TestLogger()
+    Logging.with_logger(logger) do
+        VLBIFiles.uvtable_wide(uv)
+    end
+    n = count(r -> occursin("not time-sorted", r.message), logger.logs)
+    @test n == 1
+end
+
 @testitem "prefetch!" begin
     cd(dirname(@__FILE__))
     # FITS-IDI: MmapColumn (table) + a mapview-wrapped column (FLUX)
