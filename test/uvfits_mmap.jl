@@ -40,18 +40,17 @@
                 @test isequal(eager[k], lazy[k])
             end
 
-            # DATA: eager is `Array{Float32, 7}` with groups along the last
-            # axis; lazy is `MmapGroupColumn{MmapGroupDataRow{Float32}}` of
-            # length GCOUNT whose elements are flat per-group views. Compare
-            # per-group at the head, tail, and middle (no collect needed —
-            # `vec(selectdim(...))` is a view, `isequal` walks both lazily).
+            # DATA: eager is `Array{Float32, 7}` with groups along the last axis;
+            # lazy is a column whose elements are per-group N-D KeyedArrays
+            # (COMPLEX, STOKES, FREQ, IF, RA, DEC). Values are column-major identical,
+            # so compare per-group modulo shape via `vec` — at head, tail, and middle.
             edata = eager[:DATA]
             ldata_col = lazy[:DATA]
             @test length(ldata_col) == size(edata, ndims(edata))
             for g in [1, length(ldata_col), length(ldata_col) ÷ 2 + 1]
                 e_g = vec(selectdim(edata, ndims(edata), g))
                 l_g = ldata_col[g]
-                @test isequal(e_g, l_g)
+                @test isequal(e_g, vec(l_g))
             end
         end
     end

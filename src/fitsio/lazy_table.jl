@@ -33,6 +33,11 @@ function colarray_postfunc(fhead::FITSHeader, ::Val{:WEIGHT})
 	return resf
 end
 
+function colarray_postfunc(fhead::FITSHeader, ::Val{:DATA})
+    col_naxkeys = named_axiskeys_tablecol_uvfits(fhead)
+    x -> KeyedArray(reshape(x, Tuple(map(length, col_naxkeys))); col_naxkeys...)
+end
+
 
 
 struct TableHDUColumn{T, P} <: AbstractVector{T}

@@ -266,7 +266,8 @@ function lazycolumntable(hdu::GroupedHDU)
 
     data_col = MmapGroupColumn{MmapGroupDataRow{Float32}}(
         ctx, ctx.pcount * ctx.data_elem_size, ctx.data_nelem_per_group, 1.0, 0.0)
+    data_lazy = mapview(colarray_postfunc(h, Val(:DATA)), data_col)
 
     sym_pnames = Tuple(Symbol.(pnames))
-    return NamedTuple{(sym_pnames..., :DATA)}((params..., data_col))
+    return NamedTuple{(sym_pnames..., :DATA)}((params..., data_lazy))
 end

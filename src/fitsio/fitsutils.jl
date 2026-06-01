@@ -74,3 +74,14 @@ function named_axiskeys_tablecol_fitsidi(fh::FITSHeader)
     end
     NamedTuple{keys(base)}(updvals)
 end
+
+function named_axiskeys_tablecol_uvfits(fh::FITSHeader)
+    base = named_axiskeys_tablecol(fh)
+    updvals = map(keys(base), values(base)) do k, vals
+        k == :COMPLEX            ? [:re, :im, :wt][eachindex(vals)] :   # positional; UVFITS COMPLEX CRVAL is meaningless
+        k == :STOKES             ? getindex.(Ref(val_to_stokes), vals) :
+        k ∈ (:FREQ, :IF, :RA, :DEC) ? vals :
+        error("unexpected UVFITS data axis $k")
+    end
+    NamedTuple{keys(base)}(updvals)
+end

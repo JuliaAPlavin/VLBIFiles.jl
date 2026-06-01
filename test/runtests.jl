@@ -1207,6 +1207,22 @@ end
     @test allocs(we, 2, 2, 100) == 0 && allocs(ws, 2, 2, 100) == 0
 end
 
+@testitem "lazycolumntable groupdata labeling" begin
+    using AxisKeys
+    cd(dirname(@__FILE__))
+    uv = VLBI.load(VLBI.UVData, "./data/vis.fits")
+    cols = VLBIFiles.lazycolumntable(VLBIFiles.GroupedHDU(VLBIFiles.FITS(uv.path).fitsfile, 1))
+    nd = cols.DATA[1]
+    @test nd isa KeyedArray
+    @test AxisKeys.dimnames(nd) == (:COMPLEX, :STOKES, :FREQ, :IF, :RA, :DEC)
+    @test axiskeys(nd, :COMPLEX) == [:re, :im, :wt]
+    @test axiskeys(nd, :STOKES)  == uv.header.stokes          # [:RR,:LL,:RL,:LR]
+    @test nd(COMPLEX=:re, STOKES=:RR, FREQ=axiskeys(nd,:FREQ)[1], IF=1,
+             RA=axiskeys(nd,:RA)[1], DEC=axiskeys(nd,:DEC)[1]) == cols.DATA[1][1]   # bit-match flat row
+    isconcrete(col) = isconcretetype(eltype(col))
+    @test isconcrete(cols.DATA)                                # concrete eltype (closure over locals)
+end
+
 @testitem "_" begin
     import Aqua
     Aqua.test_all(VLBIFiles; ambiguities=false, piracies=false)
