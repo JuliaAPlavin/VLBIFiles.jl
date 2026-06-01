@@ -192,7 +192,7 @@ DateTime_from_DATE_TIME(DATE, TIME) = julian_day(Float64(DATE) + TIME)
 
 Base.@kwdef struct UVData
     path::String
-    header::Union{UVHeader,Nothing}
+    header::UVHeader
     freq_windows::Vector{FrequencyWindow}
     ant_arrays::Vector{AntArray}
 end
@@ -402,13 +402,7 @@ function load(::Type{UVData}, path)
         else
             read_header(fits[1])  # uvfits
         end
-        try
-            UVHeader(fh)
-        catch e
-            e isa KeyError || rethrow()
-            rethrow()
-            nothing
-        end
+        UVHeader(fh)
     end
     freq_crpix = get(axis_dict(header.fits, "FREQ"), "CRPIX", 1.0)
     fq_table = @oget fits["AIPS FQ"] fits["FREQUENCY"] nothing
