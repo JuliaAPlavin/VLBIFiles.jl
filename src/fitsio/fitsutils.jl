@@ -40,10 +40,12 @@ axis_val(args...; zero_reference=false) = axis_vals(args...; zero_reference) |> 
 axis_vals(fh::FITSHeader, ctype; zero_reference=false) = axis_vals(axis_dict(fh, ctype); zero_reference)
 function axis_vals(dict::Dict; zero_reference=false)
     n = @oget dict["NAXIS"] dict["MAXIS"]
+    crpix = @oget dict["CRPIX"] 1   # degenerate axes (e.g. UVFITS singleton RA/DEC) carry only CRVAL
+    cdelt = @oget dict["CDELT"] 1
     if zero_reference
-        return ((1:n) .- dict["CRPIX"]) .* dict["CDELT"]
+        return ((1:n) .- crpix) .* cdelt
     else
-        return dict["CRVAL"] .+ ((1:n) .- dict["CRPIX"]) .* dict["CDELT"]
+        return dict["CRVAL"] .+ ((1:n) .- crpix) .* cdelt
     end
 end
 
