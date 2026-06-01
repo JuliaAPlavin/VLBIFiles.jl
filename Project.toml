@@ -19,6 +19,7 @@ NamedDims = "356022a1-0364-5f58-8944-0da4b18d706f"
 PrecompileTools = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
 PyFormattedStrings = "5f89f4a4-a228-4886-b223-c468a82ed5b9"
 Reexport = "189a3867-3050-52da-a836-e630ba90ab69"
+SkyCoords = "fc659fc5-75a3-5475-a2ea-3da92c065361"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 StructArrays = "09ab397b-f2b6-538f-b94a-2f83cf4a842a"
@@ -34,13 +35,11 @@ AxisKeysExtra = "b7a0d2b7-1990-46dc-b5dd-87820ecd1b09"
 Interpolations = "a98d9a8b-a2ab-59e6-89dd-64a1c18fca59"
 PythonCall = "6099a3de-0909-46bc-b1f4-468b9a2dfc0d"
 RectiGrids = "8ac6971d-971d-971d-971d-971d5ab1a71a"
-SkyCoords = "fc659fc5-75a3-5475-a2ea-3da92c065361"
 
 [extensions]
 InterpolationsExt = "Interpolations"
 PythonCallExt = "PythonCall"
 RectiGridsAxisKeysExtraExt = ["RectiGrids", "AxisKeysExtra"]
-SkyCoordsExt = "SkyCoords"
 
 [compat]
 AccessorsExtra = "0.1.77"

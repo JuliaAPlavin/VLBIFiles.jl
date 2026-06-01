@@ -26,6 +26,7 @@ import VLBIData: frequency, uvtable
 using VLBIData: filter  # for Julia below 1.11
 using Dictionaries
 using CSV
+import SkyCoords: ICRSCoords
 
 export VLBI, table, uvtable, uvw_wavelengths
 

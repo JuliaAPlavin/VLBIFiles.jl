@@ -76,6 +76,8 @@ InterferometricModels.Beam(fh::FITSHeader) = Beam(EllipticGaussian,
 
 frequency(fi::FitsImage) = axis_val(fi.header, "FREQ") * u"Hz" |> u"GHz"
 
+ICRSCoords(fi::FitsImage) = ICRSCoords(fi.header["OBSRA"] * u"°", fi.header["OBSDEC"] * u"°")
+
 
 function prepare_header(image::KeyedArray{<:Any,2}; unit::String="JY/PIXEL", freq::Union{Real,Nothing}=nothing)
     Unitful.unit(eltype(image)) == u"Jy" || error("Only images with Jy units are supported, corresponding to Jy/pix; got $(Unitful.unit(eltype(image)))")

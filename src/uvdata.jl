@@ -82,6 +82,7 @@ end
 
 frequency(h::UVHeader) = h.frequency
 Dates.Date(h::UVHeader) = h.date_obs
+ICRSCoords(h::UVHeader) = ICRSCoords(h.fits["OBSRA"] * u"°", h.fits["OBSDEC"] * u"°")
 
 function UVHeader(fh::FITSHeader)
     if (@oget fh["XTENSION"]) == "BINTABLE" && (@oget fh["EXTNAME"]) ∈ ["UV_DATA", "AIPS UV"]
@@ -346,6 +347,23 @@ function uvtable_wide(uv::UVData)
     FITS(uv.path) do fits
         haskey(fits, "UV_DATA") ? _widetable_fitsidi(uv, fits) : _widetable_uvfits(uv, fits)
     end
+end
+
+ICRSCoords(uv::UVData) = ICRSCoords(uv.header)
+
+function sources(uv::UVData)
+    FITS(uv.path) do fits
+        haskey(fits, "SOURCE") ? _sources_fitsidi(fits) : _sources_uvfits(uv)
+    end
+end
+
+_sources_uvfits(uv::UVData) = dictionary([1 => (; name = uv.header.object, coords = ICRSCoords(uv.header))])
+
+function _sources_fitsidi(fits)
+    rows = StructArrays.fromtable(fits["SOURCE"])
+    dictionary(Int(@oget r.SOURCE_ID r.var"ID_NO.") =>
+               (name = String(strip(r.SOURCE)), coords = ICRSCoords(r.RAEPO * u"°", r.DECEPO * u"°"))
+               for r in rows)
 end
 
 # shared per-row helpers; `cols` is a column table (lazy or materialized)

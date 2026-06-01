@@ -545,6 +545,20 @@ end
     @test ICRSCoords(uv) ≈ ICRSCoords(187.70595|>deg2rad, 12.39112|>deg2rad)
 end
 
+@testitem "sources" begin
+    using SkyCoords, Dictionaries
+    cd(dirname(@__FILE__))
+    uv = VLBI.load(VLBI.UVData, "./data/vis.fits")        # single-source UVFITS
+    s = VLBIFiles.sources(uv)
+    @test s isa Dictionary{Int}
+    @test s[1].name == uv.header.object
+    @test s[1].coords isa ICRSCoords
+    uvi = VLBI.load(VLBI.UVData, "./data/BL146_1.fits")   # FITS-IDI, SOURCE HDU id column is `ID_NO.`
+    si = VLBIFiles.sources(uvi)
+    @test si isa Dictionary{Int} && length(si) ≥ 1
+    @test first(si).coords isa ICRSCoords
+end
+
 @testitem "FITS IDI small" begin
     using AxisKeys
     using VLBIFiles: FITSIO
