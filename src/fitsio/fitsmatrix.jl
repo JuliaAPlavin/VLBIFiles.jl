@@ -1,4 +1,3 @@
-using StaticArrays, AxisKeys
 using NamedDims: NamedDimsArray
 
 # One row's visibilities as a lazy (stokes, channel) matrix. The flat data block is reshaped on
@@ -33,7 +32,9 @@ Base.@propagate_inbounds Base.getindex(w::FitsWMatrixEmb, s::Int, k::Int) = w.bl
 # broadcast across the band's channels. reshape throws if the block length isn't n_stokes·n_IF.
 const _WSEP_AXES = (:stokes, :band)
 struct FitsWMatrixSep{T,P} <: AbstractMatrix{T}
-    block::P; nchan_per_IF::Int; n_chan::Int
+    block::P
+    nchan_per_IF::Int
+    n_chan::Int
 end
 FitsWMatrixSep(flat::AbstractArray, n_stokes, nchan_per_IF, n_chan) =
     FitsWMatrixSep(NamedDimsArray(reshape(flat, n_stokes, n_chan ÷ nchan_per_IF), _WSEP_AXES), nchan_per_IF, n_chan)
