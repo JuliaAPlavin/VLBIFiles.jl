@@ -1247,6 +1247,40 @@ end
     end
 end
 
+@testitem "coherencymatrices" begin
+    using AxisKeys, StaticArrays
+    cd(dirname(@__FILE__))
+    uv = VLBI.load(VLBI.UVData, "./data/vis.fits")
+    wt = VLBIFiles.uvtable_wide(uv)
+    mat = wt.visibility[1]
+    V = VLBIFiles.coherencymatrices(wt.visibility)           # column: slot computed once
+    cm = V[1]                                                # one record's per-channel 2×2 view
+    @test eltype(cm) <: SMatrix{2,2,<:Complex,4}
+    f = axiskeys(mat, :freq)
+    @test cm[1][1,1] == mat(stokes=:RR, freq=f[1])           # [1,1] slot = RR
+    sub = mat(stokes=[:RR,:LL])
+    cmsub = VLBIFiles.coherencymatrices(sub, SMatrix{2,2,Int8}(1, 0, 0, 2))
+    @test all(isnan, cmsub[1][2,1])                          # cross-hand (slot 0) absent ⇒ NaN
+
+    # 0-alloc via a function barrier; the accumulator is consumed (not returned) so @allocated never boxes
+    # the result scalar — a bare top-level @allocated would box that artifact and fail spuriously.
+    function bench_cm(cm)
+        s = zero(eltype(cm))
+        @inbounds for k in eachindex(cm); s += cm[k]; end
+        s === zero(eltype(cm)) && error()                    # touch s without returning it
+        nothing
+    end
+    function bench_col(V)
+        s = zero(eltype(V[1]))
+        @inbounds for r in eachindex(V); s += V[r][1]; end
+        s === zero(eltype(V[1])) && error()
+        nothing
+    end
+    bench_cm(cm); bench_col(V)                               # compile
+    @test (@allocated bench_cm(cm)) == 0
+    @test (@allocated bench_col(V)) == 0
+end
+
 @testitem "prefetch!" begin
     cd(dirname(@__FILE__))
     # FITS-IDI: MmapColumn (table) + a mapview-wrapped column (FLUX)

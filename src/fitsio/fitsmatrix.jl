@@ -42,3 +42,30 @@ FitsWMatrixSep(block::AbstractArray{T,2}, nchan_per_IF, n_chan) where T = FitsWM
 Base.size(w::FitsWMatrixSep) = (size(w.block, :stokes), w.n_chan)
 Base.@propagate_inbounds Base.getindex(w::FitsWMatrixSep, s::Int, k::Int) =
     w.block[stokes=s, band=(k-1) ÷ w.nchan_per_IF + 1]
+
+
+# Lazy per-channel 2×2 over a (stokes,channel) matrix, using the feed→position layout from the matrix's
+# stokes axis. `absent` fills positions whose stokes is missing; `value` post-processes present
+# entries (identity for visibilities; the per-feed weight policy for weights). Both are folded into
+# getindex, so each access is one allocation-free SMatrix.
+struct CoherencyView{T,C,F} <: AbstractVector{SMatrix{2,2,T,4}}
+    mat::C
+    slot::SMatrix{2,2,Int8,4}
+    n_chan::Int
+    absent::T
+    value::F
+end
+Base.size(v::CoherencyView) = (v.n_chan,)
+Base.@propagate_inbounds Base.getindex(v::CoherencyView, k::Int) =
+    map(i -> i == 0 ? v.absent : v.value(v.mat[i, k]), v.slot)
+# A missing complex visibility is NaN+NaNim (both parts, so isnan holds and nothing inspects a stray 0im).
+_absent(::Type{Complex{T}}) where T = Complex{T}(NaN, NaN)
+_absent(::Type{T}) where T = T(NaN)
+# Two entry points: a slot-taking core (a pure view over a precomputed slot), and a column method that
+# computes the slot once from the shared stokes axis (identical across a file's records) and reuses it.
+@inline coherencymatrices(mat, slot::SMatrix{2,2,Int8}; absent=_absent(eltype(mat)), value=identity) =
+    CoherencyView(mat, slot, size(mat, 2), absent, value)
+function coherencymatrices(col::AbstractVector; absent=_absent(eltype(eltype(col))), value=identity)
+    slot = VLBIData.feed_slot_map(axiskeys(first(col), :stokes))   # stokes axis is shared across the column
+    mapview(c -> coherencymatrices(c, slot; absent, value), col)
+end
