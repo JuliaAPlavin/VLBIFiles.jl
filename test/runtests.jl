@@ -24,6 +24,18 @@ using TestItemRunner
     @test_throws MethodError VLBI.uvw_wavelengths(1.5u"s", 8.4)
 end
 
+@testitem "uvw_keys" begin
+    @test VLBIFiles.uvw_keys((:UU,:VV,:WW,:DATE)) == (:UU,:VV,:WW)
+    @test VLBIFiles.uvw_keys((Symbol("UU---SIN"),Symbol("VV---SIN"),Symbol("WW---SIN"))) ==
+          (Symbol("UU---SIN"),Symbol("VV---SIN"),Symbol("WW---SIN"))
+    @test VLBIFiles.uvw_keys((Symbol("UU-L"),Symbol("VV-L"),Symbol("WW-L"),:DATE)) ==
+          (Symbol("UU-L"),Symbol("VV-L"),Symbol("WW-L"))
+    @test VLBIFiles.uvw_keys((Symbol("UU---SIN"),Symbol("VV--SIN"),Symbol("WW-SIN"))) ==
+          (Symbol("UU---SIN"),Symbol("VV--SIN"),Symbol("WW-SIN"))           # differing dash counts, same tag
+    @test_throws Exception VLBIFiles.uvw_keys((:DATE,:TIME))                  # no UVW columns
+    @test_throws Exception VLBIFiles.uvw_keys((Symbol("UU-L"),:VV,:WW))       # tags don't match
+end
+
 @testitem "generic loading" begin
     cd(dirname(@__FILE__))
     @test VLBI.guess_type("./data/map.fits") == VLBI.FitsImage

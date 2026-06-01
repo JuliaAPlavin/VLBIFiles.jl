@@ -224,6 +224,15 @@ function read_freqs(uvh, fq_table; crpix)
 end
 
 
+function uvw_keys(colnames)
+    tag(c) = lstrip(string(c)[3:end], '-')          # suffix after the 2-letter prefix and any dashes
+    uu = only(filter(c -> startswith(string(c), "UU"), colnames))
+    t  = tag(uu)
+    pick(pre) = only(filter(c -> startswith(string(c), pre) && tag(c) == t, colnames))
+    (uu, pick("VV"), pick("WW"))
+end
+
+
 function read_data_raw(uvdata::UVData, ::typeof(identity)=identity)
     fits = FITS(uvdata)
     if haskey(fits, "UV_DATA")
