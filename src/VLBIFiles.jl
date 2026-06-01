@@ -2,6 +2,7 @@ module VLBIFiles
 
 using Reexport
 using DataManipulation
+using DataManipulation.FlexiMaps: MappedArray
 using Tables
 import Tables: table, columnnames
 using FITSIO: FITSHeader, FITS, TableHDU, read_header, colnames, FITSIO
@@ -27,10 +28,13 @@ using CSV
 
 export VLBI, table, uvtable, uvw_wavelengths
 
+function prefetch! end
+
 include("fitsio/grouphdu.jl")
 include("fitsio/fitsutils.jl")
 include("fitsio/lazy_table.jl")
 include("fitsio/fast_column_read.jl")
+include("fitsio/fitsmatrix.jl")
 
 include("uvdata.jl")
 include("fitsimage.jl")

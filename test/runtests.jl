@@ -1152,6 +1152,28 @@ end
     @test norm(fits_jcmt.xyz - cat_jcmt.xyz) < 100  # meters
 end
 
+# Measuring 0-alloc indexing: a bare `@allocated m[i,j]` at testitem top-level reports a spurious
+# ~16 bytes because the non-const local return value is boxed across the dynamic scope (a plain
+# Vector{Float32} getindex shows the same artifact). `allocs` does the @allocated inside its own
+# compiled loop, so the genuine per-index cost (0) is what's measured.
+@testitem "FitsVMatrix" begin
+    function allocs(m, i, j, n)
+        a = 0
+        for _ in 1:n
+            a += @allocated m[i, j]
+        end
+        a
+    end
+    nc, ns, nch = 2, 4, 3
+    blk = Float32.(1:nc*ns*nch)
+    c = VLBIFiles.FitsVMatrix(blk, nc, ns, nch)
+    @test size(c) == (ns, nch)
+    @test c[1,1] == Complex{Float32}(1, 2)                       # re=blk[1], im=blk[2]
+    @test c[2,1] == Complex{Float32}(3, 4)                       # next stokes, same channel
+    @test c[1,2] == Complex{Float32}(nc*ns+1, nc*ns+2)           # next channel
+    @test allocs(c, 2, 3, 100) == 0
+end
+
 @testitem "_" begin
     import Aqua
     Aqua.test_all(VLBIFiles; ambiguities=false, piracies=false)
