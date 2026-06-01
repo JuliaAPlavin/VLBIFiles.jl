@@ -63,22 +63,7 @@ end
 
 Base.size(col::TableHDUColumn) = (col.properties.length,)
 
-# not certain whether batch reads are actually faster...
-ALLOW_SCALAR = Ref(true)
-allow_scalar(enable::Bool=true) = (ALLOW_SCALAR[] = enable)
-function allow_scalar(func::Function, enable::Bool=true)
-    old = ALLOW_SCALAR[]
-    try
-        allow_scalar(enable)
-        func()
-    finally
-        allow_scalar(old)
-    end
-end
-        
-
 function Base.getindex(col::TableHDUColumn{<:Union{Number,AbstractString}}, i::Int)
-    ALLOW_SCALAR[] || error("Scalar access to FITS columns is disabled. Enable it by calling `allow_scalar()`.")
     _ensure_hdu_active!(col.hdu)
     A = Vector{eltype(col)}(undef, 1)
     CFITSIO.fits_read_col(col.hdu.fitsfile, col.properties.colnum, i, 1, A)
@@ -86,7 +71,6 @@ function Base.getindex(col::TableHDUColumn{<:Union{Number,AbstractString}}, i::I
 end
 
 function Base.getindex(col::TableHDUColumn{<:AbstractArray}, i::Int)
-    ALLOW_SCALAR[] || error("Scalar access to FITS columns is disabled. Enable it by calling `allow_scalar()`.")
     _ensure_hdu_active!(col.hdu)
     A = Vector{eltype(eltype(col))}(undef, col.properties.rowsize)
     CFITSIO.fits_read_col(col.hdu.fitsfile, col.properties.colnum, i, 1, A)

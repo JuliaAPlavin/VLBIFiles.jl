@@ -179,10 +179,7 @@ function _mmap_table_context(hdu::TableHDU)
     # Validate that our column byte width computation agrees with NAXIS1
     ncols = fhead["TFIELDS"]
     computed_row_bytes = sum(_column_byte_width(hdu.fitsfile, c) for c in 1:ncols)
-    if computed_row_bytes != row_bytes
-        @warn "Column byte widths ($computed_row_bytes) don't match NAXIS1 ($row_bytes), falling back to CFITSIO" _id=:mmap_offset_mismatch maxlog=1
-        return nothing
-    end
+    computed_row_bytes == row_bytes || error("computed column byte widths disagree with NAXIS1")
 
     io = open(filepath, "r")
     data = Mmap.mmap(io, Vector{UInt8})
