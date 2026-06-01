@@ -28,7 +28,7 @@ using Dictionaries
 using CSV
 import SkyCoords: ICRSCoords
 
-export VLBI, table, uvtable, uvw_wavelengths
+export VLBI, table, uvtable, uvw_wavelengths, uvtable_wide, sources, coherencymatrices, prefetch!
 
 function prefetch! end
 
@@ -47,16 +47,17 @@ include("ngehtsim_data.jl")
 
 baremodule VLBI
 using Reexport
+using Base: filter, !==
 
 import ..VLBIData
-_names = [n for n in VLBIData.names(VLBIData.VLBI) if Core.:(===)(Core.:(===)(n, :VLBI), false)]
+_names = filter(n -> n !== :VLBI, VLBIData.names(VLBIData.VLBI))
 Core.eval(VLBI, Expr(:import, Expr(:(:), Expr(:., :., :., :VLBIData), [Expr(:., n) for n in _names]...)))
 Core.eval(VLBI, Expr(:export, _names...))
 
 @reexport import ..VLBIFiles:
     VLBIFiles,
     load, save, guess_type, ngehtsim_antenna_catalog,
-    table, uvw_wavelengths,
+    table, uvw_wavelengths, uvtable_wide, sources, coherencymatrices, prefetch!,
     FitsImage, FrequencyWindow, UVHeader, AntArray, UVData, Alist,
     pixel_size, pixel_steps, pixel_area,
     image_stored, image_clean, image_residual, image_clean_with_residual
