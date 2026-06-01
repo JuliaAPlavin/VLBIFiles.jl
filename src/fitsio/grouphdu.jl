@@ -271,3 +271,5 @@ function lazycolumntable(hdu::GroupedHDU)
     sym_pnames = Tuple(Symbol.(pnames))
     return NamedTuple{(sym_pnames..., :DATA)}((params..., data_lazy))
 end
+
+materialize_columns(cols::NamedTuple{N, <:Tuple{Vararg{MmapGroupColumn}}}) where {N} = map(collect, cols)

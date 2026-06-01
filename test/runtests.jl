@@ -1223,6 +1223,23 @@ end
     @test isconcrete(cols.DATA)                                # concrete eltype (closure over locals)
 end
 
+@testitem "uvtable_wide" begin
+    using AxisKeys, Unitful, StaticArrays, Dates
+    cd(dirname(@__FILE__))
+    for path in ("./data/vis.fits", "./data/BL146_1.fits")     # UVFITS, FITS-IDI
+        uv = VLBI.load(VLBI.UVData, path)
+        wt = VLBIFiles.uvtable_wide(uv)
+        @test propertynames(wt) ⊇ (:baseline, :datetime, :uvw, :source_id, :visibility, :weight)
+        @test wt.baseline isa AbstractVector{<:Baseline{Symbol}}
+        @test wt.datetime isa AbstractVector{DateTime}
+        @test eltype(wt.uvw) <: SVector{3,<:Quantity}
+        row = wt[1]
+        @test axiskeys(row.visibility, :stokes) == uv.header.stokes
+        @test length(axiskeys(row.visibility, :freq)) == sum(fw -> fw.nchan, uv.freq_windows)
+        @test row.visibility isa KeyedArray && row.weight isa KeyedArray
+    end
+end
+
 @testitem "_" begin
     import Aqua
     Aqua.test_all(VLBIFiles; ambiguities=false, piracies=false)

@@ -9,6 +9,7 @@ using FITSIO: FITSHeader, FITS, TableHDU, read_header, colnames, FITSIO
 using Dates
 using Unitful, UnitfulAstro, UnitfulAngles
 using AxisKeys
+using AxisKeys: keyless_unname
 using AxisKeys.IntervalSets
 using StaticArrays
 using StructArrays

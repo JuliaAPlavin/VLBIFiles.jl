@@ -49,6 +49,8 @@ function frequencies(fw::FrequencyWindow)
     return Float64(fw.freq) .+ ((1:fw.nchan) .- fw.crpix) .* cdelt
 end
 
+frequencies(fws::AbstractVector{<:FrequencyWindow}) = flatmap(frequencies, fws)
+
 Base.isless(a::FrequencyWindow, b::FrequencyWindow) = a.freq < b.freq
 
 function Statistics.mean(xs::AbstractVector{<:FrequencyWindow})
@@ -338,6 +340,98 @@ uvtable(uvd::UVData; impl=identity) = @p uvd _table(;impl) map((;
     spec=VisSpec(_.baseline, UV(_.uv)),
     value=U.Value(_.visibility, 1/√_.weight),
 ))
+
+
+function uvtable_wide(uv::UVData)
+    FITS(uv.path) do fits
+        haskey(fits, "UV_DATA") ? _widetable_fitsidi(uv, fits) : _widetable_uvfits(uv, fits)
+    end
+end
+
+# shared per-row helpers; `cols` is a column table (lazy or materialized)
+_decode_uvw(cols)          = (k = uvw_keys(keys(cols)); map((u,v,w) -> SVector(u,v,w) .* u"s" .* u"c" .|> u"m",
+                                                            cols[k[1]], cols[k[2]], cols[k[3]]))
+_layout(uv)               = (length(uv.header.stokes),                        # n_stokes
+                             uniqueonly(fw.nchan for fw in uv.freq_windows),   # nchan_per_IF
+                             length(uv.freq_windows))                          # n_IF
+
+# FITS-IDI UVW are light-travel seconds (TUNIT may be absent in older files); refuse any other unit.
+function _assert_uvw_seconds(fh, ks)
+    units = Dict(strip(fh["TTYPE$i"]) => (@oget fh["TUNIT$i"]) for i in 1:fh["TFIELDS"])
+    for k in ks
+        u = units[string(k)]
+        isnothing(u) || strip(u) ∈ ("SECONDS", "s", "sec") || error("FITS-IDI UVW column $k has TUNIT=$u, expected seconds")
+    end
+end
+
+# L1 analysis cell: transform one record's L0 N-D array `nd` into a (stokes,channel) complex KeyedArray.
+# `keyless_unname` hands FitsVMatrix the raw block so it can reshape COMPLEX/stokes/(FREQ×BAND) into its
+# named (COMPLEX,stokes,channel) view (re/im combined on access). The stokes axis carries over from `nd`
+# (same values); only `freq` is supplied fresh — the authoritative per-channel axis from freq_windows.
+_viscell(nd, nc, ns, nt, frq) =
+    KeyedArray(FitsVMatrix(keyless_unname(nd), nc, ns, nt); stokes=axiskeys(nd, :STOKES), freq=frq)
+
+function _widetable_fitsidi(uv, fits)
+    length(unique(fw.freqid for fw in uv.freq_windows)) == 1 || error("multi-FREQID files not supported")
+    hdu  = fits["UV_DATA"]
+    fh   = read_header(hdu)
+    cols = lazycolumntable(hdu)                             # L0: FLUX/WEIGHT are faithful N-D KeyedArray columns
+    _assert_uvw_seconds(fh, uvw_keys(keys(cols)))
+    n_stokes, nchan_per_IF, n_IF = _layout(uv); n_total = nchan_per_IF * n_IF
+    n_complex = fh["MAXIS1"]
+    # eager scalar metadata in one pread pass (FLUX/WEIGHT — the array columns — are dropped first)
+    meta = materialize_columns(delete(cols, @o _.FLUX _.WEIGHT))
+    baseline  = map(b -> Baseline_from_fits(b, uv.ant_arrays), meta.BASELINE)
+    datetime  = julian_day.(meta.DATE .+ meta.TIME)
+    uvw       = _decode_uvw(meta)
+    source_id = Int.(meta.SOURCE)
+    frq = frequencies(uv.freq_windows)                      # authoritative per-channel freq; stokes reused from each cell
+    # L1: each cell is a `mapview` transform of the L0 N-D array — no `parent`, the lazy column is `mapview` itself
+    visibility = mapview(nd -> _viscell(nd, n_complex, n_stokes, n_total, frq), cols.FLUX)
+    weight = if haskey(cols, :WEIGHT)                        # separate WEIGHT N-D (per stokes, band)
+        mapview(w -> KeyedArray(FitsWMatrixSep(keyless_unname(w), n_stokes, nchan_per_IF, n_total); stokes=axiskeys(w, :STOKES), freq=frq), cols.WEIGHT)
+    else                                                     # embedded weight = 3rd COMPLEX entry of FLUX
+        mapview(nd -> KeyedArray(FitsWMatrixEmb(keyless_unname(nd), n_complex, n_stokes, n_total); stokes=axiskeys(nd, :STOKES), freq=frq), cols.FLUX)
+    end
+    wt = StructArray((; baseline, datetime, uvw, source_id, visibility, weight))
+    _finalize(wt, meta, uv)
+end
+
+function _widetable_uvfits(uv, fits)
+    hdu  = GroupedHDU(fits.fitsfile, 1)
+    cols = lazycolumntable(hdu)                             # L0: DATA is a faithful N-D KeyedArray column
+    isnothing(cols) && error("UVFITS file is not mmappable")
+    n_stokes, nchan_per_IF, n_IF = _layout(uv); n_total = nchan_per_IF * n_IF
+    n_complex = read_header(hdu)["NAXIS2"]
+    n_complex == 3 || error("UVFITS COMPLEX axis NAXIS2=$n_complex; only embedded-weight files (NAXIS2=3) are supported")
+    # eager scalar metadata (the DATA array column is dropped first, stays lazy) — same call as FITS-IDI
+    meta = materialize_columns(delete(cols, @o _.DATA))
+    baseline  = map(b -> Baseline_from_fits(b, uv.ant_arrays), meta.BASELINE)
+    date2     = haskey(meta, :_DATE) ? meta._DATE : 0
+    datetime  = julian_day.(meta.DATE .+ date2)
+    uvw       = _decode_uvw(meta)
+    source_id = fill(1, length(baseline))
+    frq = frequencies(uv.freq_windows)
+    visibility = mapview(nd -> _viscell(nd, n_complex, n_stokes, n_total, frq), cols.DATA)
+    weight     = mapview(nd -> KeyedArray(FitsWMatrixEmb(keyless_unname(nd), n_complex, n_stokes, n_total); stokes=axiskeys(nd, :STOKES), freq=frq), cols.DATA)
+    wt = StructArray((; baseline, datetime, uvw, source_id, visibility, weight))
+    _finalize(wt, meta, uv)
+end
+
+# adds the optional int_time column and emits faithful warnings; `cols` is the row-metadata column table
+function _finalize(wt, cols, uv)
+    haskey(cols, :INTTIM) && (wt = @insert wt.int_time = cols.INTTIM .* u"s")
+    issorted(wt.datetime)                   || @warn "visibility rows are not time-sorted" path=uv.path
+    _has_noncanonical_baseline(wt.baseline) && @warn "some physical baselines appear in both orientations" path=uv.path
+    wt
+end
+
+# §8 "canonical" = each physical baseline uses one orientation throughout (FringyFITS asserts this); flag
+# if some {a,b} appears as both (a,b) and (b,a). Reads the already-decoded baselines (no raw-code re-decode).
+function _has_noncanonical_baseline(baselines)
+    prs = Set(VLBIData.antenna_names(bl) for bl in baselines)
+    any(p -> p[1] != p[2] && (p[2], p[1]) ∈ prs, prs)
+end
 
 function load(::Type{UVData}, path)
     path = abspath(path)  # for RFC.File
