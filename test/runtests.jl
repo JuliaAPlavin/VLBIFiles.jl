@@ -427,7 +427,7 @@ end
     @test allequal(avg.freq_spec)
     fs = avg.freq_spec[1]
     @test fs isa VLBI.FrequencyWindow
-    @test fs.freq ≈ mean(fw -> fw.freq, uv.freq_windows)
+    @test fs.freq ≈ mean(VLBIFiles.frequencies(uv.freq_windows))   # band center over all channels
     @test fs.width ≈ sum(fw -> fw.width, uv.freq_windows)
 
     # most baselines×times have all 8 freq windows
@@ -968,6 +968,49 @@ end
     freqs = VLBIFiles.frequencies(fw)
     @test freqs[1] ≈ 8.40595875e9u"Hz"  rtol=1e-6
     @test freqs[end] ≈ 8.41295875e9u"Hz"  rtol=1e-6
+end
+
+@testitem "combine_windows contiguous" begin
+    using Unitful
+    FW = VLBIFiles.FrequencyWindow
+    # two contiguous IFs sharing a 2 MHz channel step, 4 channels each, CRPIX=1
+    a = FW(1, 1, 8.000f9u"Hz", 8f6u"Hz", 4, 1, 1f0)   # channel centers 8000,8002,8004,8006 MHz
+    b = FW(1, 2, 8.008f9u"Hz", 8f6u"Hz", 4, 1, 1f0)   # channel centers 8008,8010,8012,8014 MHz
+    c = VLBIFiles.combine_windows([a, b])
+    @test c.nchan == 8
+    @test c.width ≈ 16f6u"Hz"
+    @test c.freq == a.freq
+    # merged grid is exactly the two channel grids concatenated, still a StepRangeLen
+    @test VLBIFiles.frequencies(c) isa StepRangeLen
+    @test VLBIFiles.frequencies(c) ≈ vcat(VLBIFiles.frequencies(a), VLBIFiles.frequencies(b))
+end
+
+@testitem "combine_windows non-contiguous packs uniformly" begin
+    using Unitful
+    FW = VLBIFiles.FrequencyWindow
+    a = FW(1, 1, 8.000f9u"Hz", 8f6u"Hz", 4, 1, 1f0)
+    b = FW(1, 2, 8.020f9u"Hz", 8f6u"Hz", 4, 1, 1f0)   # 12 MHz gap after a's last channel
+    c = VLBIFiles.combine_windows([a, b])
+    @test c.nchan == 8
+    # channels packed onto one uniform 2 MHz grid, ignoring the gap
+    @test VLBIFiles.frequencies(c) isa StepRangeLen
+    @test step(VLBIFiles.frequencies(c)) ≈ 2f6u"Hz"
+    # so the packed grid is NOT the real (gapped) channel frequencies
+    @test !(VLBIFiles.frequencies(c) ≈ vcat(VLBIFiles.frequencies(a), VLBIFiles.frequencies(b)))
+end
+
+@testitem "_aggfreq representative frequency is the band center" begin
+    using Unitful, Statistics
+    FW = VLBIFiles.FrequencyWindow
+    # multichannel IFs: the single representative freq must be the mean over ALL channels (band
+    # center), not the mean of the per-IF channel-1 reference freqs
+    a = FW(1, 1, 8.000f9u"Hz", 8f6u"Hz", 4, 1, 1f0)
+    b = FW(1, 2, 8.008f9u"Hz", 8f6u"Hz", 4, 1, 1f0)
+    agg = VLBIFiles.VLBIData._aggfreq([a, b])
+    @test agg.nchan == 1
+    @test agg.width ≈ 16f6u"Hz"
+    @test agg.freq ≈ mean(VLBIFiles.frequencies([a, b]))       # band center = 8007 MHz
+    @test !(agg.freq ≈ mean(fw -> fw.freq, [a, b]))            # ≠ mean-of-references (8004 MHz)
 end
 
 @testitem "alist" begin

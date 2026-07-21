@@ -53,24 +53,32 @@ frequencies(fws::AbstractVector{<:FrequencyWindow}) = flatmap(frequencies, fws)
 
 Base.isless(a::FrequencyWindow, b::FrequencyWindow) = a.freq < b.freq
 
-function Statistics.mean(xs::AbstractVector{<:FrequencyWindow})
-    nchan = (@p xs map(_.nchan) sum)
-    FrequencyWindow(
-        first(xs).freqid,
-        first(xs).ix,
-        (@p xs map(_.freq) mean),
-        (@p xs map(_.width) sum),
-        nchan,
-        (@p xs map(_.sideband) uniqueonly),
-        Float32((nchan + 1) / 2),
-    )
-end
+"""
+    combine_windows(windows) -> FrequencyWindow
 
-function VLBIData._aggfreq(freq_specs::AbstractVector{<:FrequencyWindow})
-    mean_freq = mean(fs -> fs.freq, freq_specs)
-    total_width = sum(fs -> fs.width, freq_specs)
-    return VLBIFiles.FrequencyWindow(0, 0, mean_freq, total_width, 1, 1, 1f0)
-end
+Merge ascending-frequency `windows` into one wider window. Anchoring `freq`/`crpix` at the first window
+keeps `frequencies` of the result the exact channel concatenation for equal-step contiguous inputs;
+non-contiguous inputs get packed onto that uniform grid anyway.
+"""
+combine_windows(xs::AbstractVector{<:FrequencyWindow}) = FrequencyWindow(
+    first(xs).freqid,
+    first(xs).ix,
+    first(xs).freq,
+    (@p xs map(_.width) sum),
+    (@p xs map(_.nchan) sum),
+    (@p xs map(_.sideband) uniqueonly),
+    first(xs).crpix,
+)
+
+# representative freq is the band center (mean over all channels), not the mean of per-window references
+VLBIData._aggfreq(freq_specs::AbstractVector{<:FrequencyWindow}) = FrequencyWindow(
+    0, 0,
+    mean(frequencies(freq_specs)),
+    (@p freq_specs map(_.width) sum),
+    1,
+    (@p freq_specs map(_.sideband) uniqueonly),
+    1f0,
+)
 
 Base.@kwdef struct UVHeader
     fits::FITSHeader
